@@ -1,3 +1,5 @@
+This program was developed based on ZeroInstall BrowserDriver for VBA (@kabkabkab) and changed the connection from CDP to WebDriverBidi.
+
 【Operation explanation】
 
 ・When you press the above button, it will connect to the existing WebDriver in the download folder
