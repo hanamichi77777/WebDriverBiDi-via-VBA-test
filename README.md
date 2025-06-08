@@ -21,6 +21,5 @@ https://zenn.dev/yusukeiwaki/scraps/00fd022cb857e0
 					
 〇regular expression					
 vba-regex fork (@sihlfall @GCuser99)					
-https://github.com/GCuser99/SeleniumVBA/discussions/158					
-![image](https://github.com/user-attachments/assets/ac875cd7-5919-4487-ad70-2e84346a3c6f)
+https://github.com/GCuser99/SeleniumVBA/discussions/158
 
