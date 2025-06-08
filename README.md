@@ -6,7 +6,7 @@
 ・Launching the SeleniumVBA homepage using WebDriverBiDi
 
 ・Detect the event "browsingContext.domContentLoaded", 
-display a message box, and close the browser.
+display a message box.
 
 Open the Immediate Window to see the details of various events.
 ※Anything not beginning with an ID is received due to event detection.
