@@ -23,6 +23,6 @@ Puppeteerのコードを見つつ、BiDiを手でさわってみる(@Yusuke Iwak
 https://zenn.dev/yusukeiwaki/scraps/00fd022cb857e0					
 					
 ・regular expression					
-vba-regex fork (@sihlfall @GCuser99)					
+vba-regex fork (@sihlfall @GCuser99)	
 https://github.com/GCuser99/SeleniumVBA/discussions/158
 
