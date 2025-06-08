@@ -8,7 +8,7 @@
 ・Detect the event "browsingContext.domContentLoaded", 
 display a message box.
 
-Open the Immediate Window to see the details of various events.
+・Open the Immediate Window to see the details of various events.
 ※Anything not beginning with an ID is received due to event detection.
 
 
