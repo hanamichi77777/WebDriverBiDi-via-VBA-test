@@ -1,4 +1,4 @@
-This program has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi. I hope to be able to detect events with SeleniumVBA.
+This program has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi. I hope to be able to detect Events with SeleniumVBA.
 
 【Operation explanation】
 
