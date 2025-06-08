@@ -10,7 +10,7 @@ display a message box, and close the browser.
 ④Open the Immediate Window to see the details of various events.
 ※Anything not beginning with an ID is received due to event detection.
 
-【Reference materials】					
+【Reference materials】
 〇WebSocket communication using VBA					
 ZeroInstall BrowserDriver for VBA(@kabkabkab)					
 https://qiita.com/kabkabkab/items/d187fd1622fede038cce					
