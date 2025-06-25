@@ -4,6 +4,7 @@ I have uploaded an experimental file that shows WebDriverBiDi working with Selen
 This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi with a WebSocket connection. I created this in hopes of making it possible to detect Events using SeleniumVBA6.5 test1(@GCuser99).
 
 [Modifications]
+
 ・Cross-browser compatible (Edge, Chrome)
 ・Added standard module "A_00_BIDI".Can be enabled or disabled in BiDI
 ・Class module WebDriver modification
