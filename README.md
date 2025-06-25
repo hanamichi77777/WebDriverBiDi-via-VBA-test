@@ -32,6 +32,3 @@ https://qiita.com/kabkabkab/items/d187fd1622fede038cce
 2. BIDI Implementation Notes
 ・Puppeteerのコードを見つつ、BiDiを手でさわってみる(@Yusuke Iwaki)
 https://zenn.dev/yusukeiwaki/scraps/00fd022cb857e0
-![image](https://github.com/user-attachments/assets/1cd2413c-645e-4108-9b08-0d3fa3854c6d)
-
-
