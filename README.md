@@ -26,6 +26,7 @@ However, the number of elements for 4 and 5 is different, so the waiting is insu
 7. Close the browser and exit WebDriver
 8. You can check the contents of various events in the Immediate window
 *Among these events that do not start with Receive with ID will be an event.
+
 [Reference materials]
 1. WebSocket communication related with VBA
 ・ZeroInstall BrowserDriver for VBA (@kabkabkab)
