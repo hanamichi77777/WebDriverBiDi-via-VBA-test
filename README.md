@@ -9,6 +9,7 @@ This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kab
 ・Class module WebDriver modification
 ・Detected by specifying the event name as the second argument of "SendAndReceive".
 ・Move common processing for BiDI related to a class module that starts with "BiDi"
+
 [Operation explanation]
 1. Press the above button and you will see it in the download folder.
 Connect to an existing WebDriver and perform WebSocket communication.
