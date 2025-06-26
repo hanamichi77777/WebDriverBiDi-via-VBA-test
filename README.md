@@ -24,8 +24,9 @@ https://note.com/topic/novel
 (In this case, the event will not be detected.)
 6. After 4 seconds, the same process as 4 is performed, and after completion, the process is suspended for a while to confirm.
 However, the number of elements for 4 and 5 is different, so the waiting is insufficient.why?
-7. Close the browser and exit WebDriver
-8. You can check the contents of various events in the Immediate window
+![Image](https://github.com/user-attachments/assets/58277310-ab58-4817-b64c-78182c6ae1f8)
+8. Close the browser and exit WebDriver
+9. You can check the contents of various events in the Immediate window
 *Among these events that do not start with Receive with ID will be an event.
 
 [Reference materials]
