@@ -29,6 +29,10 @@ However, the number of elements for 4 and 5 is different, so the waiting is insu
 9. You can check the contents of various events in the Immediate window
 *Among these events that do not start with Receive with ID will be an event.
 
+[My article (Japanese)]
+
+https://note.com/sele_chan/n/n2b21c7c26ef8
+
 [Reference materials]
 1. WebSocket communication related with VBA
 ・ZeroInstall BrowserDriver for VBA (@kabkabkab)
