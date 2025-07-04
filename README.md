@@ -1,4 +1,4 @@
-【6/26/2025】
+【7/4/2025】
 I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA6.5 test1(@GCuser99).
 
 This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi with a WebSocket connection. I created this in hopes of making it possible to detect Events using SeleniumVBA6.5(@GCuser99).
@@ -19,14 +19,13 @@ Connect to an existing WebDriver and perform WebSocket communication.
 3. Note Novel Categories for Dynamic Page Loading with WebDriverBIDI
 Transition to the URL.
 https://note.com/topic/novel
-4. Wait for browsingContext.load event to occur
-   ![Image](https://github.com/user-attachments/assets/58277310-ab58-4817-b64c-78182c6ae1f8)
-6. Obtain the number of elements for each article using FindElements using normal operation not BiDi
+4. Wait until the network.responseCompleted event occurs. However, the waiting continues until all requests in network.beforeRequestSent have completed.
+5. Obtain the number of elements for each article using FindElements using normal operation not BiDi
 (In this case, the event will not be detected.)
-7. After 4 seconds, the same process as 4 is performed, and after completion, the process is suspended for a while to confirm.
-However, the number of elements for 4 and 5 is different, so the waiting is insufficient.why?
-8. Close the browser and exit WebDriver
-9. You can check the contents of various events in the Immediate window
+6. After 4 seconds, the same process as 4 is performed, and the process is temporarily suspended for confirmation after completion.
+As a result, the number of elements 4 and 5 is the same, so it can be confirmed that they are waiting.
+7. Close the browser and exit WebDriver
+8. You can check the contents of various events in the Immediate window
 *Among these events that do not start with Receive with ID will be an event.
 
 [My article (Japanese)]
