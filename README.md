@@ -18,12 +18,12 @@ This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kab
 
 ② Enable log notifications limited to browsingContext and script (displayed in the immediate window)
 
-③ Move to the URL of the note novel category where pages are dynamically loaded using WebDriverBIDI.
+**③ Move to the URL of the note novel category where pages are dynamically loaded using WebDriverBIDI.**
 
-④ Wait until the network.responseCompleted event occurs.
-However, the waiting will continue until all requests in network.beforeRequestSent have completed."
+**④ Wait until the network.responseCompleted event occurs.
+However, the waiting will continue until all requests in network.beforeRequestSent have completed."**
 
-⑤ Even if all requests are processed, a new network.beforeRequestSent may occur, so after waiting for the specified number of seconds, it continues if an event occurs, and ends if it does not occur.
+**⑤ Even if all requests are processed, a new network.beforeRequestSent may occur, so after waiting for the specified number of seconds, it continues if an event occurs, and ends if it does not occur.**
 
 ⑥ Obtain the number of elements for each article using FindElements using normal operation (in this case, event will not be detected)
 
