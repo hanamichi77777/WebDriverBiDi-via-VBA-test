@@ -16,7 +16,7 @@ This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kab
 
 ① Press the above button to connect to an existing WebDriver in the download folder and perform WebSocket communication.
 
-② Enable log notifications limited to browsingContext and script (displayed in the immediate window)
+② Enable log notifications limited to network.beforeRequestSent and network.responseCompleted (displayed in the immediate window)
 
 **③ Move to the URL of the note novel category where pages are dynamically loaded using WebDriverBIDI.**
 
