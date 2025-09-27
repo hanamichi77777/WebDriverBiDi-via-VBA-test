@@ -37,6 +37,7 @@ If no match is made, increase the number of seconds specified in ⑤."
 
 [https://qiita.com/sele_chan/items/b6bdc321cf440fe5ac83](https://qiita.com/sele_chan/items/b6bdc321cf440fe5ac83)
 
+[https://note.com/sele_chan/n/n2b21c7c26ef8](https://note.com/sele_chan/n/n2b21c7c26ef8)
 
 **[Reference materials]**
 1. WebSocket communication related with VBA
