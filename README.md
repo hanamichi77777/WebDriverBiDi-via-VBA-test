@@ -1,6 +1,6 @@
 **【9/27/2025 Updated】**
 
-I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA6.6 (@GCuser99).
+I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA6.7 (@GCuser99).
 To prevent the file from being deleted due to a false positive by Defender, a password [pass] is set for the file.
 
 This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi with a WebSocket connection. I created this in hopes of making it possible to detect Events using SeleniumVBA(@GCuser99).
