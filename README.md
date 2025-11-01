@@ -1,4 +1,4 @@
-**【10/23/2025 Updated】**
+**【11/02/2025 Updated】**
 
 I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA6.9 (@GCuser99).
 To prevent the file from being deleted due to a false positive by Defender, a password "pass" is set for the file.
