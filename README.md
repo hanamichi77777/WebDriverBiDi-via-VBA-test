@@ -19,8 +19,6 @@ Button center
 
 〇 Wait until the dynamic page has finished loading
 
-〇 Convert the displayed page to a PDF file and output it
-
 Right side of button
 
 〇 Enter characters in the text box
