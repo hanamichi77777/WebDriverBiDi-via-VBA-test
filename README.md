@@ -1,4 +1,4 @@
-**【11/17/2025 Updated】**
+**【11/22/2025 Updated】**
 
 I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA6.9 (@GCuser99).
 To prevent the file from being deleted due to a false positive by Defender, a password "pass" is set for the file.
@@ -15,11 +15,16 @@ Left side of button
 
 〇 On a web page where an asynchronous event occurs when a select box is selected, wait until the event completes.
 
-Right side of button
+Button center
 
 〇 Wait until the dynamic page has finished loading
 
 〇 Convert the displayed page to a PDF file and output it
+
+Right side of button
+
+〇 Enter characters in the text box
+
 
 **[My article (Only Japanese)]**
 
