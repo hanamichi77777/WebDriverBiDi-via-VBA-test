@@ -21,7 +21,7 @@ Button center
 
 Right side of button
 
-〇 Enter characters in the text box
+〇  On a web page where an asynchronous event occurs when characters in the TextBox is enterd, wait until the event completes.
 
 
 **[My article (Only Japanese)]**
