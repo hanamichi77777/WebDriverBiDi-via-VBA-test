@@ -19,6 +19,8 @@ Button center
 
 〇 Wait until the dynamic page has finished loading
 
+〇 Get status code even when logged in
+
 Right side of button
 
 〇  On a web page where an asynchronous event occurs when characters in the TextBox is enterd, wait until the event completes.
