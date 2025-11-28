@@ -34,6 +34,7 @@ Other（inside the module）
 **[My article (Only Japanese)]**
 
 [https://qiita.com/sele_chan/items/6475a1f7ae8a21435d6c](https://qiita.com/sele_chan/items/6475a1f7ae8a21435d6c)
+
 [https://note.com/sele_chan/n/n2b21c7c26ef8](https://note.com/sele_chan/n/n2b21c7c26ef8)
 
 **[Reference materials]**
