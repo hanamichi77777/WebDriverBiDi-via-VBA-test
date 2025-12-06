@@ -31,6 +31,8 @@ Other（inside the module）
 
 〇 Network blocking processing
 
+〇Searching within ShadowDOM, including waiting
+
 **[My article (Only Japanese)]**
 
 [https://qiita.com/sele_chan/items/6475a1f7ae8a21435d6c](https://qiita.com/sele_chan/items/6475a1f7ae8a21435d6c)
