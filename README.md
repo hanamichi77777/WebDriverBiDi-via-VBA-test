@@ -31,7 +31,7 @@ Other（inside the module）
 
 〇 Network blocking processing
 
-〇Searching within ShadowDOM, including waiting
+〇 Searching within ShadowDOM, including waiting
 
 **[My article (Only Japanese)]**
 
