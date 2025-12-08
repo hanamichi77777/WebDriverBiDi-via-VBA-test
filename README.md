@@ -7,7 +7,7 @@ This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kab
 
 **[Operation explanation]**
 
-Left side of button
+**Left side of button**
 
 〇 Loading Chrome extensions that are only supported by WebDriver BiDi 
 
@@ -15,13 +15,13 @@ Left side of button
 
 〇 On a web page where an asynchronous event occurs when a select box is selected, wait until the event completes.
 
-Button center
+**Button center**
 
 〇 Wait until the dynamic page has finished loading
 
 〇 Get status code even when logged in
 
-Right side of button
+**Right side of button**
 
 〇 Hide ads
 
