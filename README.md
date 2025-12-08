@@ -31,7 +31,7 @@ Other（inside the module）
 
 〇 Waiting during login operations
 
-〇 Network blocking processing
+〇 Toggle ads on and off
 
 〇 Searching within ShadowDOM, including waiting
 
