@@ -23,7 +23,9 @@ Button center
 
 Right side of button
 
-〇  On a web page where an asynchronous event occurs when characters in the TextBox is enterd, wait until the event completes.
+〇 Hide ads
+
+〇 On a web page where an asynchronous event occurs when characters in the TextBox is enterd, wait until the event completes.
 
 Other（inside the module）
 
