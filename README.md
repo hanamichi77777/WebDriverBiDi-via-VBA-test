@@ -5,8 +5,7 @@ To prevent the file from being deleted due to a false positive by Defender, a pa
 
 This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kabkabkab) and changed the connection from CDP to WebDriverBidi with a WebSocket connection. I created this in hopes of making it possible to detect Events using SeleniumVBA(@GCuser99).
 
-I am pushing the limits of VBA to resolve the instabilities caused by DOM manipulation and asynchronous communication inherent in modern SPAs like React and Vue.js.
-
+To overcome the flakiness arising from DOM updates and async requests in modern SPAs like React and Vue.js, I’m challenging the boundaries of what’s possible with VBA.
 
 **[Operation explanation]**
 
