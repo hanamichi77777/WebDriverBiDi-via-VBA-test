@@ -1,4 +1,4 @@
-**【12/25/2025 Updated】**
+**【12/26/2025 Updated】**
 
 I have uploaded an experimental file that shows WebDriverBiDi working with SeleniumVBA ver.7.0 (@GCuser99).
 To prevent the file from being deleted due to a false positive by Defender, a password "123" is set for the file.
