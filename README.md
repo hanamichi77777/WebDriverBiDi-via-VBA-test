@@ -8,7 +8,8 @@ This VBAprogram has developed based on "ZeroInstall BrowserDriver for VBA" (@kab
 To overcome the flakiness arising from DOM updates and async requests in modern SPAs like React and Vue.js, I’m challenging the boundaries of what’s possible with VBA.
 
 **[Supported Browsers]**
-Edge/Chrome ※Firefox is not supported due to functional limitations.
+
+Edge/Chrome ※**Firefox is not supported due to functional limitations**.
 
 **[Operation explanation]**
 
