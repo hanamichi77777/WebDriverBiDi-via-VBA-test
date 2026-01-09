@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BiDi Network Persistence Tester (5s)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .container { border: 1px solid #333; padding: 20px; width: 450px; background: #fff; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        select { width: 100%; padding: 8px; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; font-size: 1em; color: #0056b3; background: #f0f8ff; }
+        .note { font-size: 0.85em; color: #666; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>Server-Side Delay Tester (5s)</h3>
+        <p>Proves BiDi can track long-running network requests.</p>
+
+        <label for="userSelector">Select Action:</label>
+        <select id="userSelector" onchange="triggerLongFetch()">
+            <option value="">-- Choose to Trigger --</option>
+            <option value="1">Start 5-Second Server Request</option>
+        </select>
+
+        <label for="nameField">Network/DOM Status:</label>
+        <input type="text" id="nameField" readonly placeholder="Idle...">
+
+        <div class="note">
+            <b>Mechanism:</b><br>
+            1. Immediate DOM change (0ms).<br>
+            2. Fetch starts immediately and stays open for <b>5s</b> using httpbin.org.<br>
+            3. Final update occurs only after the server responds.
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Triggers a fetch request with a real server-side delay.
+         * httpbin.org/delay/5 will wait 5 seconds before sending a response.
+         */
+        function triggerLongFetch() {
+            const selector = document.getElementById('userSelector');
+            const nameField = document.getElementById('nameField');
+            
+            if (selector.value === "") return;
+
+            // 1. SYNC UPDATE
+            nameField.value = "Requesting... (Connection Open for 5s)";
+
+            // 2. PERSISTENT NETWORK REQUEST
+            fetch('https://httpbin.org/delay/5')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network error');
+                    return response.json();
+                })
+                .then(data => {
+                    // 3. FINAL ASYNC UPDATE
+                    nameField.value = "Success: Response Received!";
+                })
+                .catch(error => {
+                    nameField.value = "Error: Server unreachable or Timeout.";
+                    console.error(error);
+                });
+        }
+    </script>
+</body>
+</html>
