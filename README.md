@@ -25,6 +25,7 @@ This project demonstrates high-level web automation using the **WebDriver BiDi (
 
 #### 1. Main01: Enhanced Select Box & Extension Injection
 This module focuses on handling elements that trigger complex JavaScript state changes. 
+* **Dynamic Extension** Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions—such as ad-blockers or custom tools—without cluttering the system registry or permanent configuration files.
 * **Smart Selection:** Utilizes `ExecuteSelectValueByXPath`. Unlike standard Selenium, this command can be configured to wait for the browser's "Idle" state immediately after the selection, ensuring that any subsequent calendar or UI updates are fully rendered before the script proceeds.
 
 #### 2. Main02: SPA Auto-Clicking & Dynamic Synchronization
