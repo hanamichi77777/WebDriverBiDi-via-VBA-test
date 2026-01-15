@@ -15,21 +15,15 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 
 ---
 
-## [Operation Explanation]
-
-This project demonstrates high-level web automation using the **WebDriver BiDi (Bidirectional Protocol)** within a VBA environment. It addresses complex automation challenges—such as Shadow DOM traversal and real-time event monitoring—specifically optimized for modern web applications.
-
----
-
 ## 📂 Procedure Overview (Sample Module: `A_01BiDiTest`)
 
 #### 1. Main01: Enhanced Select Box & Extension Injection
-This module focuses on handling elements that trigger complex JavaScript state changes. 
+This procedure focuses on handling elements that trigger complex JavaScript state changes. 
 * **Dynamic Extension** Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions—such as ad-blockers or custom tools—without cluttering the system registry or permanent configuration files.
 * **Smart Selection:** Utilizes `ExecuteSelectValueByXPath`. Unlike standard Selenium, this command can be configured to wait for the browser's "Idle" state immediately after the selection, ensuring that any subsequent calendar or UI updates are fully rendered before the script proceeds.
 
 #### 2. Main02: SPA Auto-Clicking & Dynamic Synchronization
-Designed for high-activity SPA environments like *note.com*, this module ensures interaction with elements that are dynamically added to the DOM.
+Designed for high-activity SPA environments like *note.com*, this procedure ensures interaction with elements that are dynamically added to the DOM.
 * **Full-Stack Idleness Monitoring:** Once the main navigation (`browsingContext.navigate`) completes, the script injects the `window.__vbaIdleProbe`. 
 * **Real-time Traffic Tracking:** The logs demonstrate the probe tracking `inflightXhrCount` and `inflightFetchCount`. The VBA code effectively "waits" for these counts to spike and then return to zero, combined with a stable `lastMutationTs`, ensuring the dynamic article feed has finished streaming before proceeding.
 
@@ -48,7 +42,7 @@ Solves the "nested frame" problem found in legacy portals.
 * **Direct Context Targeting:** Instead of using context switching, the script retrieves the unique `context` ID for the specific frame and passes it directly to interaction commands.
 
 #### 6. Main07: SPA Idleness Detection & Shadow DOM Traversal
-Targeting heavy JavaScript platforms (e.g., ServiceNow), this module implements a sophisticated **"BiDi Probe"** system for SPA synchronization.
+Targeting heavy JavaScript platforms (e.g., ServiceNow), this procedure implements a sophisticated **"BiDi Probe"** system for SPA synchronization.
 * **Advanced SPA Synchronization:** Uses a triple-layer check (XHR, Fetch, and Mutation timestamps) to ensure the framework is fully hydrated.
 * **Robust Context Recovery:** Automatically detects "Context Lost" errors during SPA redirects and waits (500ms) for context recovery.
 
