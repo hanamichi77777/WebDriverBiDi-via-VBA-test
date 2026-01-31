@@ -11,7 +11,7 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 
 ## [Supported Browsers]
 * **Edge / Chrome**
-* *※ Firefox is not supported due to functional limitations.*
+* *Firefox is not supported due to functional limitations.*
 
 ---
 
