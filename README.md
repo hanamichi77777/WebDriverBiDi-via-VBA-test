@@ -1,6 +1,6 @@
 # WebDriver BiDi Automation for SeleniumVBA
 
-### 【1/19/2026 Updated】 Improved robustness for SPA environments.
+### 【1/31/2026 Updated】 Improved robustness for SPA environments.
 I have uploaded an experimental file that shows WebDriver BiDi working with **[SeleniumVBA ver.7.2](https://github.com/GCuser99/SeleniumVBA)** (@GCuser99). To prevent the file from being deleted due to a false positive by Windows Defender, a password **"123"** is set for the file.
 
 This VBA program was developed based on **"ZeroInstall BrowserDriver for VBA"** (@kabkabkab) and changed the connection from CDP to WebDriver BiDi with a WebSocket communication. I created this in hopes of making it possible to detect Events using SeleniumVBA (@GCuser99).
@@ -17,7 +17,7 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 
 ## 📂 Procedure Overview (Sample Module: `A_01BiDiTest`)
 
-#### 1. Main01: Enhanced Select Box & Extension Injection
+#### 1. Main01: Enhanced Select Box(Use test.html) & Extension(Use Google Translate extension) Injection
 This procedure focuses on handling elements that trigger complex JavaScript state changes. 
 * **Dynamic Extension** Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions—such as ad-blockers or custom tools—without cluttering the system registry or permanent configuration files.
 * **Smart Selection:** Utilizes `ExecuteSelectValueByXPath`. Unlike standard Selenium, this command can be configured to wait for the browser's "Idle" state immediately after the selection, ensuring that any subsequent calendar or UI updates are fully rendered before the script proceeds.
