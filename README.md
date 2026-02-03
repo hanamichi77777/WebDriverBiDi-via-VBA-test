@@ -1,6 +1,6 @@
 # WebDriver BiDi Automation for SeleniumVBA
 
-### 【2/4/2026 Updated】 Improved robustness for SPA environments.
+### 【2/4/2026 Updated】Improved robustness for SPA environments.
 I have uploaded an experimental file that shows WebDriver BiDi working with **[SeleniumVBA ver.7.2](https://github.com/GCuser99/SeleniumVBA)** (@GCuser99). To prevent the file from being deleted due to a false positive by Windows Defender, a password **"123"** is set for the file.
 
 This VBA program was developed based on **"ZeroInstall BrowserDriver for VBA"** (@kabkabkab) and changed the connection from CDP to WebDriver BiDi with a WebSocket communication. I created this in hopes of making it possible to detect Events using SeleniumVBA (@GCuser99).
