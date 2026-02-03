@@ -15,7 +15,7 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 
 ---
 
-## 📂 Procedure Overview (Sample Module: `A_01BiDi_Sample`)
+## 📂 Procedure Overview (Sample Module: `A_01_BiDi_Sample`)
 
 #### 1. Main01: Enhanced Select Box（Use test.html）& Extension（Use Google Translate extension）Injection & Recording
 This procedure focuses on handling elements that trigger complex JavaScript state changes. 
