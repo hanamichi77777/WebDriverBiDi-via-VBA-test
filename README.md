@@ -17,39 +17,66 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 
 ## 📂 Procedure Overview (Sample Module: `A_01_BiDi_Sample`)
 
-#### 1. Main01: Enhanced Select Box（Use test.html）& Extension（Use Google Translate extension）Injection & Recording
-This procedure focuses on handling elements that trigger complex JavaScript state changes. 
-* **Dynamic Extension** Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions—such as ad-blockers or custom tools—without cluttering the system registry or permanent configuration files.
-* **Smart Selection:** Utilizes `ExecuteSelectValueByXPath`. Unlike standard Selenium, this command can be configured to wait for the browser's "Idle" state immediately after the selection, ensuring that any subsequent calendar or UI updates are fully rendered before the script proceeds.
+#### 1. Main01: Enhanced Select Box & Extension Injection & Recording
+This procedure focuses on handling elements that trigger complex JavaScript state changes.
+
+Dynamic Extension Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions without cluttering the system registry.
+
+Smart Selection: Utilizes ExecuteSelectValueByXPath. This command can be configured to wait for the browser's "Idle" state immediately after selection, ensuring subsequent UI updates are fully rendered before proceeding.
 
 #### 2. Main02: SPA Auto-Clicking & Dynamic Synchronization
-Designed for high-activity SPA environments like *note.com*, this procedure ensures interaction with elements that are dynamically added to the DOM.
-* **Full-Stack Idleness Monitoring:** Once the main navigation (`browsingContext.navigate`) completes, the script injects the `window.__vbaIdleProbe`. 
-* **Real-time Traffic Tracking:** The logs demonstrate the probe tracking `inflightXhrCount` and `inflightFetchCount`. The VBA code effectively "waits" for these counts to spike and then return to zero, combined with a stable `lastMutationTs`, ensuring the dynamic article feed has finished streaming before proceeding.
+Designed for high-activity SPA environments like note.com, this procedure ensures interaction with elements that are dynamically added to the DOM.
+
+Full-Stack Idleness Monitoring: Once navigation completes, the script injects window.__vbaIdleProbe to monitor internal browser states.
+
+Real-time Traffic Tracking: The probe tracks inflightXhrCount and inflightFetchCount. The VBA code waits for these counts to return to zero combined with a stable lastMutationTs, ensuring the dynamic feed has finished streaming.
 
 #### 3. Main03: Performance Optimization via CDP-over-BiDi Bridge
 This procedure demonstrates how to make automation up to 5x faster by controlling the network layer using a hybrid protocol approach.
-* **Hybrid Protocol Bridge:** Utilizes `goog:cdp.sendCommand` to access low-level domains. It enables `Network.setBlockedURLs` to filter out images and ad scripts before the navigation command is sent.
-* **Post-Navigation Idleness Probe:** Injects `window.__vbaIdleProbe` to ensure the environment is quiescent before entering search data.
+
+Hybrid Protocol Bridge: Utilizes goog:cdp.sendCommand to access low-level domains, enabling Network.setBlockedURLs to filter out images and ad scripts before navigation.
+
+Post-Navigation Idleness Probe: Injects window.__vbaIdleProbe to ensure the environment is quiescent before entering data, maximizing execution speed and reliability.
 
 #### 4. Main04: Event-Driven URL Monitoring
-Bypasses the "flaky" nature of login redirections.
-* **Event vs. Polling:** Uses `ExecuteIsUrlContains` to hook into the browser's internal navigation events. The VBA script wakes up instantly the millisecond the URL matches the target, ensuring no time is wasted.
+Bypasses the "flaky" nature of login redirections by moving away from polling.
 
-#### 5. Main06: Iframe Context Piercing & Hierarchical Mapping
+Event vs. Polling: Uses ExecuteIsUrlContains to hook into the browser's internal navigation events. The script wakes up instantly the millisecond the URL matches the target, ensuring no time is wasted waiting for fixed intervals.
+
+#### 5. Main05: Asynchronous DOM Mutation & State Validation
+Focuses on synchronizing with elements that are delayed or generated via AJAX, ensuring the script does not outpace the UI updates.
+
+Smart Async Interaction: Utilizes ExecuteClickByXPath to interact with AJAX-driven content. The command internally monitors BiDi events to ensure the action is processed during a stable browser state.
+
+Instant State Verification: Demonstrates how to validate dynamic DOM insertions (e.g., the "Done!" label) immediately after an action, eliminating the need for manual polling loops.
+
+#### 6. Main06: Iframe Context Piercing & Hierarchical Mapping
 Solves the "nested frame" problem found in legacy portals.
-* **Hierarchical Tree Mapping:** Executes `browsingContext.getTree` to map the entire context hierarchy, identifying deeply nested sub-frames.
-* **Direct Context Targeting:** Instead of using context switching, the script retrieves the unique `context` ID for the specific frame and passes it directly to interaction commands.
 
-#### 6. Main07: SPA Idleness Detection & Shadow DOM Traversal
-Targeting heavy JavaScript platforms (e.g., ServiceNow), this procedure implements a sophisticated **"BiDi Probe"** system for SPA synchronization.
-* **Advanced SPA Synchronization:** Uses a triple-layer check (XHR, Fetch, and Mutation timestamps) to ensure the framework is fully hydrated.
-* **Robust Context Recovery:** Automatically detects "Context Lost" errors during SPA redirects and waits (500ms) for context recovery.
+Hierarchical Tree Mapping: Executes browsingContext.getTree to map the entire context hierarchy, identifying deeply nested sub-frames.
 
-#### 7. Main09: Discovery Log & Diagnostic Recording
-A specialized tool for reverse-engineering and debugging.
-* **Event Stream:** Uses `StartDiscoveryLog` to capture a raw feed of every browser event, including network requests, console logs, and DOM changes.
-* **Analysis:** Records activity for 20 seconds and saves it to `discovery_log.txt`.
+Direct Context Targeting: Instead of using traditional context switching, the script retrieves a unique context ID for the specific frame and passes it directly to interaction commands.
+
+#### 7. Main07: SPA Idleness Detection & Shadow DOM Traversal
+Targeting heavy JavaScript platforms (e.g., ServiceNow), this procedure implements a sophisticated "BiDi Probe" system.
+
+Advanced SPA Synchronization: Uses a triple-layer check (XHR, Fetch, and Mutation timestamps) to ensure the framework is fully hydrated.
+
+Robust Context Recovery: Automatically detects "Context Lost" errors during SPA redirects and waits for context recovery before proceeding.
+
+#### 8. Main08: Automated Dialog Interception & Response
+Handles browser-native "Alert" and "Prompt" dialogs that typically block execution, using BiDi’s event-driven architecture.
+
+Non-Blocking Alert Management: By setting AutoAcceptAlerts = True, the script automatically handles alert() or confirm() dialogs in the background, preventing the execution from hanging.
+
+Dynamic Prompt Injection: Employs AutoPromptText to automatically inject predefined strings into interactive prompts, enabling full automation of user-input workflows.
+
+#### 9. Main09: Discovery Log & Diagnostic Recording
+A specialized tool for reverse-engineering and debugging complex automation scenarios.
+
+Event Stream: Uses StartDiscoveryLog to capture a raw feed of every browser event, including network requests, console logs, and DOM changes.
+
+Analysis: Records activity for a specified duration (e.g., 20 seconds) and saves it to discovery_log.txt for post-mortem analysis.
 
 ---
 
