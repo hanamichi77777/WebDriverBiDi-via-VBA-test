@@ -64,14 +64,7 @@ Advanced SPA Synchronization: Uses a triple-layer check (XHR, Fetch, and Mutatio
 
 Robust Context Recovery: Automatically detects "Context Lost" errors during SPA redirects and waits for context recovery before proceeding.
 
-#### 8. Main08: Automated Dialog Interception & Response
-Handles browser-native "Alert" and "Prompt" dialogs that typically block execution, using BiDi’s event-driven architecture.
-
-Non-Blocking Alert Management: By setting AutoAcceptAlerts = True, the script automatically handles alert() or confirm() dialogs in the background, preventing the execution from hanging.
-
-Dynamic Prompt Injection: Employs AutoPromptText to automatically inject predefined strings into interactive prompts, enabling full automation of user-input workflows.
-
-#### 9. Main09: Discovery Log & Diagnostic Recording
+#### 8. Main09: Discovery Log & Diagnostic Recording
 A specialized tool for reverse-engineering and debugging complex automation scenarios.
 
 Event Stream: Uses StartDiscoveryLog to capture a raw feed of every browser event, including network requests, console logs, and DOM changes.
