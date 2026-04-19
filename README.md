@@ -76,6 +76,7 @@ Analysis: Records activity for a specified duration (e.g., 20 seconds) and saves
 ### 🔗 External Links
 * [Qiita - Article by sele_chan](https://qiita.com/sele_chan/items/6475a1f7ae8a21435d6c)
 * [note - Article by sele_chan](https://note.com/sele_chan/n/n2b21c7c26ef8)
+* [Midium - Article by hanamichi77777](https://medium.com/@hanamichi77777/webdriver-bidi-for-seleniumvba-ee4687887d03)
 
 ### [Reference Materials]
 * **WebSocket communication related with VBA:** [ZeroInstall BrowserDriver for VBA (@kabkabkab)](https://qiita.com/kabkabkab/items/d187fd1622fede038cce)
