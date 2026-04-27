@@ -7,6 +7,8 @@ This VBA program was developed based on **"ZeroInstall BrowserDriver for VBA"** 
 
 To overcome the flakiness arising from DOM updates and async requests in modern SPAs like React and Vue.js, I’m challenging the boundaries of what’s possible with VBA.Since we assume the concurrent use of both Classic and BiDi, the BiDi methods are kept to a minimum.
 
+For validation purposes, I have established a challenging benchmark: correctly entering text into the ServiceNow login form. ServiceNow is frequently cited as one of the most difficult Single Page Applications (SPAs) to automate. The execution code is contained in the Main07 procedure.
+
 ---
 
 ## [Supported Browsers]
