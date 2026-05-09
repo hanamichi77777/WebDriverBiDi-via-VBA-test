@@ -10,7 +10,8 @@ To overcome the flakiness arising from DOM updates and async requests in modern 
 For validation purposes, I have established a challenging benchmark: correctly entering text into the ServiceNow login form. ServiceNow is frequently cited as one of the most difficult Single Page Applications (SPAs) to automate. The execution code is contained in the **Main07 procedure**.
 
 ---
-
+## [Supported OS]
+* **Windows11**
 ## [Supported Browsers]
 * **Edge / Chrome**
 * *Firefox is not supported due to functional limitations.*
