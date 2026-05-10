@@ -74,8 +74,6 @@ Multi-Instance Orchestration: Launches five browser sessions concurrently from w
 
 Synchronized SPA Interlock: Features a BiDi-specific "Click Interlock" that leverages waitNetworkIdle and minStableMs. This allows for millisecond-precise, real-time monitoring of Ajax-driven content updates, ensuring the automation stays perfectly in sync with asynchronous SPA transitions.
 
-Fail-Safe Cleanup Logic: Equipped with a robust EmergencyShutdown protocol. In the event of an unexpected error or timeout, the procedure immediately terminates all driver communications and BiDi wrappers (handling both Sockets and Processes) to prevent memory leaks or "zombie" background processes.
-
 #### 9. Main09: Discovery Log & Diagnostic Recording
 A specialized tool for reverse-engineering and debugging complex automation scenarios.
 
