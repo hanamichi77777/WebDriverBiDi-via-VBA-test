@@ -70,7 +70,7 @@ Robust Context Recovery: Automatically detects "Context Lost" errors during SPA 
 #### 8. Main08: BiDi Multi-Session Stress Test & Parallel Synchronization
 A high-load durability test procedure designed to push the boundaries of VBA's WebSocket (BiDi) connection limits while achieving simultaneous control across multiple browser windows.
 
-Multi-Instance Orchestration: Launches five browser sessions concurrently from within a single process. It establishes and manages individual BiDi connections (WebSockets) for each session, pushing VBA's native socket management capabilities to its peak for parallel execution.
+Multi-Instance Orchestration: Launches three browser sessions concurrently from within a single process. It establishes and manages individual BiDi connections (WebSockets) for each session, pushing VBA's native socket management capabilities to its peak for parallel execution.
 
 Synchronized SPA Interlock: Features a BiDi-specific "Click Interlock" that leverages waitNetworkIdle and minStableMs. This allows for millisecond-precise, real-time monitoring of content updates driven by asynchronous communication, ensuring the automation stays perfectly in sync with asynchronous SPA transitions.
 
