@@ -7,7 +7,7 @@ This VBA program was developed based on **"ZeroInstall BrowserDriver for VBA"** 
 
 To overcome the flakiness arising from DOM updates and async requests in modern SPAs like React and Vue.js, I’m challenging the boundaries of what’s possible with VBA.Since we assume the concurrent use of both Classic and BiDi, the BiDi methods are kept to a minimum.
 
-For validation purposes, I have established a challenging benchmark: correctly entering text into the ServiceNow login form. ServiceNow is frequently cited as one of the most difficult Single Page Applications (SPAs) to automate. The execution code is contained in the **Main07 procedure**.
+For validation purposes, I have established a challenging benchmark: correctly entering text into the ServiceNow login form. ServiceNow is frequently cited as one of the most difficult Single Page Applications (SPAs) to automate. The execution code is contained in the **Main07 and Main08 procedure**.
 
 ---
 ## [Supported OS]
@@ -67,7 +67,16 @@ Advanced SPA Synchronization: Uses a triple-layer check (XHR, Fetch, and Mutatio
 
 Robust Context Recovery: Automatically detects "Context Lost" errors during SPA redirects and waits for context recovery before proceeding.
 
-#### 8. Main09: Discovery Log & Diagnostic Recording
+#### 8. Main08: BiDi Multi-Session Stress Test & Parallel Synchronization
+A high-load durability test procedure designed to push the boundaries of VBA's WebSocket (BiDi) connection limits while achieving simultaneous control across multiple browser windows.
+
+Multi-Instance Orchestration: Launches five browser sessions concurrently from within a single process. It establishes and manages individual BiDi connections (WebSockets) for each session, pushing VBA's native socket management capabilities to its peak for parallel execution.
+
+Synchronized SPA Interlock: Features a BiDi-specific "Click Interlock" that leverages waitNetworkIdle and minStableMs. This allows for millisecond-precise, real-time monitoring of Ajax-driven content updates, ensuring the automation stays perfectly in sync with asynchronous SPA transitions.
+
+Fail-Safe Cleanup Logic: Equipped with a robust EmergencyShutdown protocol. In the event of an unexpected error or timeout, the procedure immediately terminates all driver communications and BiDi wrappers (handling both Sockets and Processes) to prevent memory leaks or "zombie" background processes.
+
+#### 9. Main09: Discovery Log & Diagnostic Recording
 A specialized tool for reverse-engineering and debugging complex automation scenarios.
 
 Event Stream: Uses StartDiscoveryLog to capture a raw feed of every browser event, including network requests, console logs, and DOM changes.
