@@ -68,9 +68,11 @@ Advanced SPA Synchronization: Uses a triple-layer check (XHR, Fetch, and Mutatio
 Robust Context Recovery: Automatically detects "Context Lost" errors during SPA redirects and waits for context recovery before proceeding.
 
 #### 8. Main08: BiDi Multi-Session Stress Test & Parallel Synchronization
-Features a BiDi-specific "Click Interlock" that leverages waitNetworkIdle and minStableMs. 
+A high-load durability test procedure designed to push the boundaries of VBA's WebSocket (BiDi) connection limits while achieving simultaneous control across multiple browser windows.
 
-This allows for millisecond-precise, real-time monitoring of content updates driven by asynchronous communication, ensuring the automation stays perfectly in sync with asynchronous SPA transitions.
+Multi-Instance Orchestration: Launches five browser sessions concurrently from within a single process. It establishes and manages individual BiDi connections (WebSockets) for each session, pushing VBA's native socket management capabilities to its peak for parallel execution.
+
+Synchronized SPA Interlock: Features a BiDi-specific "Click Interlock" that leverages waitNetworkIdle and minStableMs. This allows for millisecond-precise, real-time monitoring of content updates driven by asynchronous communication, ensuring the automation stays perfectly in sync with asynchronous SPA transitions.
 
 #### 9. Main09: Discovery Log & Diagnostic Recording
 A specialized tool for reverse-engineering and debugging complex automation scenarios.
