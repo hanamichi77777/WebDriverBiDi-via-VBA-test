@@ -25,6 +25,8 @@ This procedure focuses on handling elements that trigger complex JavaScript stat
 
 Dynamic Extension Injection: Utilizes the WebDriver BiDi webExtension.install command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions without cluttering the system registry.
 
+Note: Note: Please ensure that the Google Translate Chrome extension is installed on your PC in advance.
+
 Smart Selection: Utilizes ExecuteSelectValueByXPath. This command can be configured to wait for the browser's "Idle" state immediately after selection, ensuring subsequent UI updates are fully rendered before proceeding.
 
 #### 2. Main02: SPA Auto-Clicking & Dynamic Synchronization
