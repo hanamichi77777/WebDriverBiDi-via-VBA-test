@@ -90,4 +90,3 @@ Analysis: Records activity for a specified duration (e.g., 20 seconds) and saves
 
 ### [Reference Materials]
 * **WebSocket communication related with VBA:** [ZeroInstall BrowserDriver for VBA (@kabkabkab)](https://qiita.com/kabkabkab/items/d187fd1622fede038cce)
-* **BiDi Implementation Notes:** [Puppeteerのコードを見つつ、BiDiを手でさわってみる (@Yusuke Iwaki)](https://zenn.dev/yusukeiwaki/scraps/00fd022cb857e0)
