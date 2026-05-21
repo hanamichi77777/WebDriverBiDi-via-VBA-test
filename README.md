@@ -64,7 +64,7 @@ Designed as a stress test targeting highly reactive SPAs (e.g., Google Flights) 
 A specialized tool for reverse-engineering and debugging complex automation scenarios.
 * **Event Stream:** Uses `StartDiscoveryLog` to capture a raw feed of every browser event, including network requests, console logs, and DOM changes (with an option to exclude image/css noise).
 * **Analysis:** Records activity using `RecordEventsForSeconds` for a specified duration and saves it via `StopAndSaveDiscoveryLog` for post-mortem analysis.
-> 💡 **Tip:** By providing this log to an AI, you can get recommendations for the optimal idle time.
+ >💡 **Tip:** By providing this log to an AI, you can identify **noisy request URLs** and get recommendations for the **optimal idle time**.
 ---
 ### 🔗 External Links
 * [Midium - Article by hanamichi77777](https://medium.com/@hanamichi77777/webdriver-bidi-for-seleniumvba-ee4687887d03)
