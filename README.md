@@ -25,10 +25,11 @@ This procedure focuses on handling elements that trigger complex JavaScript stat
 * **Dynamic Extension Injection:** Utilizes the WebDriver BiDi `ExecuteWebExtensionInstall` command to load extensions directly into the browser session from a local path. This enables the runtime "bypass injection" of extensions without cluttering the system registry. *(Note: Please ensure that the Google Translate Chrome extension is installed on your PC in advance.)*
 * **Smart Selection:** Utilizes `ExecuteSelectValueByXPath`. This command can be configured to wait for the browser's "Idle" state immediately after selection, ensuring subsequent UI updates are fully rendered before proceeding.
 
-### 2. Main02: SPA Auto-Clicking & Dynamic Synchronization
-Designed for high-activity SPA environments like note.com, this procedure ensures interaction with elements that are dynamically added to the DOM.
-* **Full-Stack Idleness Monitoring:** Once navigation completes, the script injects `window.__vbaIdleProbe` to monitor internal browser states.
-* **Real-time Traffic Tracking:** The probe tracks `inflightXhrCount` and `inflightFetchCount`. The VBA code waits for these counts to return to zero combined with a stable `lastMutationTs`, ensuring the dynamic feed has finished streaming.
+### 2. Main02: Auto-Scrolling for Lazy Load & Dynamic SPA Synchronization
+Designed for Single-Page Application (SPA) environments that utilize infinite scrolling (lazy loading) like note.com, this procedure ensures reliable interaction with elements dynamically added to the DOM.
+* **Inducing Dynamic Loads via Auto-Scrolling:** By using the ExecuteLazyLoadScroll method, the script repeatedly scrolls to the bottom of the page to forcefully trigger the loading of additional content (e.g., article lists).
+* **Full-Stack Idleness Monitoring:** After navigation and during scrolling, the script injects window.__vbaIdleProbe to monitor the browser's internal state.
+* **Real-Time Traffic Tracking & Synchronization:** The probe continuously tracks inflightXhrCount (active XHR requests) and inflightFetchCount (active Fetch requests). The VBA code waits for these counts to return to zero and for lastMutationTs (the timestamp of the final DOM mutation) to stabilize, guaranteeing that the dynamic feed has finished loading completely.
 
 ### 3. Main03: Performance Optimization via CDP-over-BiDi Bridge
 This procedure demonstrates how to make automation up to 5x faster by controlling the network layer using a hybrid protocol approach.
