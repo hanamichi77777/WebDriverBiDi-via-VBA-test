@@ -1,6 +1,6 @@
 # WebDriver BiDi for SeleniumVBA
 
-![WebDriver BiDi for SeleniumVBA](images/pr_image.png)
+![WebDriver BiDi for SeleniumVBA](image/pr_image.png)
 
 I have uploaded an experimental file that shows WebDriver BiDi working with **[SeleniumVBA](https://github.com/GCuser99/SeleniumVBA)** (@GCuser99). 
 
