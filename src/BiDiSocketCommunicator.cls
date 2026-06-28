@@ -22,7 +22,7 @@ Option Explicit
 ' 2. ANTI-RAT DESIGN: This implementation enforces a strict URL validation policy that
 '    blocks non-localhost routing, preventing its use as a Remote Access Tool (RAT).
 ' 3. NO DATA EXFILTRATION: By architectural design, this module cannot initiate connections
-'    to remote C2 (Command & Control) servers, ensuring zero risk of outbound exfiltration.
+'    to remote C2 (Command & Control) servers, and is designed to prevent outbound exfiltration.
 ' 4. NATIVE OS INTEGRITY: Utilizes 'WinHttp.dll' (a signed, core Windows System Component)
 '    for socket handshaking, complying with enterprise-level EDR auditing and OS policies.
 ' 5. OPEN-SOURCE TRANSPARENCY: Part of the SeleniumVBA project (GCuser99).
@@ -33,6 +33,38 @@ Option Explicit
 '    bidirectional events (e.g., real-time network interception, console logs).
 '    The communication is inherently safe as the WebDriver process only exposes its
 '    BiDi endpoint to the local loopback interface.
+' ==========================================================================
+' AI NAVIGATION MAP  (transport layer; the Wrapper is the upper layer)
+' Read before editing any single method. The risk is not "where is X" but
+' "which wire-level invariant does X participate in". This class owns the
+' socket; business logic, retries and SPA waits live in BiDiCommandWrapper.
+'
+' [FUNNELS]  Route through these; do not open ad-hoc paths.
+'   Connect        : 7-stage WinHttp WebSocket handshake; the ONLY place handles are acquired.
+'   SendCommand    : unified id-gen + envelope + size-check + SendAndReceive (callers pass method+params).
+'   SendAndReceive : core synchronous I/O, held under the m_isSendReceiving lock.
+'   SendMessage    : raw frame send; never re-sends the same id (see INVARIANTS).
+'   GetMessage     : 100ms poll; swallows the PING(1) reply, returns all other BiDi events.
+'
+' [STATE OWNERSHIP]  This class is the owner. Do not duplicate these upstream.
+'   WinHttp/WebSocket handles : hSession_, hConnection_, hRequest_, hWebSocket_
+'   Request id generation     : GetNextRequestId (seed = CMD_ID_FLOOR)
+'   Inflight tracking         : Track/Untrack/ResetInflightTracking, PendingRequestCount
+'   QPC monotonic clock       : NowTicks / NowMs / ElapsedMs (single source of time)
+'   I/O locks                 : m_isSendReceiving, m_isReading
+'
+' [INVARIANTS]  Breaking these = double-free, deadlock, or protocol violation.
+'   HANDLE OWNERSHIP : on a successful upgrade the request handle is closed and ownership
+'                      passes to hWebSocket_; on a FAILED CompleteUpgrade, hRequest_ is closed
+'                      defensively. Never retain or double-close it.
+'   RE-ENTRANCY      : no DoEvents / PumpMessages while m_isSendReceiving is True (WinHttp
+'                      state corrupts under re-entrant receive).
+'   ID BANDS         : [1..99] reserved (PING=1, PostScript reply=2); commands [CMD_ID_FLOOR=100 .. ID_MAX].
+'   NO RESEND        : on send failure SendMessage recovers the socket but returns False; the same
+'                      id is never re-sent (W3C requires unique ids). Retry is the Wrapper's job, new id.
+'   ERROR HANDLER    : no file I/O (Trace) inside the error handler.
+'   QPC FAIL-FAST    : Class_Initialize raises vbObjectError+9001 if QPC is unavailable.
+' ==========================================================================
 ' --- Configuration ---
 Private Const DEBUG_MODE As Boolean = False
 Private Const AGENT_NAME As String = "SeleniumVBA/BiDi-Client (Open-Source; Local-IPC-Only)"
@@ -140,11 +172,11 @@ Private m_AllowUiPump As Boolean
 Private m_qpcFreq As Currency ' QueryPerformanceFrequency cache (set in Class_Initialize)
 Private m_lastPumpTicks As Currency ' Throttle state for PumpMessages
 
-' --- [Phase 1] Request ID Management (migrated from Wrapper) ---
+' --- Request ID Management (owner; see AI NAVIGATION MAP) ---
 Private m_nextRequestId As Long
 Private Const MAX_MSG_SIZE As Long = 300000 ' Threshold to prevent VBA hanging (mirrors Wrapper constant)
 
-' --- [Phase 3] Inflight Network Request Tracking (migrated from Wrapper) ---
+' --- Inflight Network Request Tracking (owner; see AI NAVIGATION MAP) ---
 ' Tracks active network requests by requestId to determine when all HTTP activity
 ' has settled. The Dictionary stores requestId -> True for O(1) lookup/removal.
 ' m_pendingRequestCount is a derived counter kept in sync for fast reads.
@@ -189,10 +221,10 @@ Private Sub Class_Initialize()
     ' Moderate buffer growth threshold (3 consecutive full reads)
     m_GrowThresholdCount = 3
 
-    ' [Phase 1] Request ID seed (first issued id = CMD_ID_FLOOR)
+    ' Request ID seed (first issued id = CMD_ID_FLOOR)
     m_nextRequestId = CMD_ID_FLOOR - 1
 
-    ' [Phase 3] Inflight tracking initialization
+    ' Inflight tracking initialization
     Set m_inflightRequests = New Dictionary
     m_pendingRequestCount = 0
 
@@ -211,11 +243,11 @@ Private Sub Class_Terminate()
     
     Disconnect
     If Not m_InStream Is Nothing Then
-        If m_InStream.state = adStateOpen Then m_InStream.Close
+        If m_InStream.State = adStateOpen Then m_InStream.Close
         Set m_InStream = Nothing
     End If
     If Not m_OutStream Is Nothing Then
-        If m_OutStream.state = adStateOpen Then m_OutStream.Close
+        If m_OutStream.State = adStateOpen Then m_OutStream.Close
         Set m_OutStream = Nothing
     End If
     Set m_RegExp = Nothing
@@ -224,7 +256,7 @@ End Sub
 
 ' Resets the target stream state and sets the required type without cross-talk
 Private Sub PrepareStream(ByVal strm As ADODB.Stream, ByVal sType As StreamTypeEnum)
-    If strm.state = adStateClosed Then strm.Open
+    If strm.State = adStateClosed Then strm.Open
     strm.Position = 0
     strm.SetEOS ' Truncate existing data
     strm.Type = sType
@@ -233,7 +265,7 @@ End Sub
 ' Helper to safely release stream resources
 Private Sub CloseStream(ByRef strm As ADODB.Stream)
     If Not strm Is Nothing Then
-        If strm.state = adStateOpen Then strm.Close
+        If strm.State = adStateOpen Then strm.Close
         Set strm = Nothing
     End If
 End Sub
@@ -243,7 +275,7 @@ Public Property Get IsConnected() As Boolean: IsConnected = (hWebSocket_ <> 0): 
 Public Property Let PollingInterval(ByVal v As Long): m_PollingInterval = v: End Property
 Public Property Let AllowUiPump(ByVal v As Boolean): m_AllowUiPump = v: End Property
 Public Property Get AllowUiPump() As Boolean: AllowUiPump = m_AllowUiPump: End Property
-Public Property Get state() As BiDiSocketState: state = m_State: End Property
+Public Property Get State() As BiDiSocketState: State = m_State: End Property
 Public Property Let AutoReconnect(ByVal v As Boolean): m_AutoReconnect = v: End Property
 Public Property Get AutoReconnect() As Boolean: AutoReconnect = m_AutoReconnect: End Property
 Public Property Get ConsecutiveInternalErrors() As Long: ConsecutiveInternalErrors = m_consecutiveInternalErrors: End Property
@@ -306,13 +338,13 @@ Public Function Connect(ByVal wsUrl As String, ByVal localPort As Long) As Boole
     
     Dim Path As String: Path = ExtractPath(wsUrl)
     
-    ' [FIX] Dynamically extract the host to match the actual binding
+    ' WHY: dynamically extract the host to match the actual binding
     Dim host As String: host = ExtractHost(wsUrl)
 
     hSession_ = WinHttpOpen(StrPtr(AGENT_NAME), WINHTTP_ACCESS_TYPE_NO_PROXY, 0, 0, 0)
     If hSession_ = 0 Then Err.Raise 513, "BiDiSocket", "WinHttpOpen failed"
 
-    ' --- CRITICAL FIX: UI RESPONSIVENESS vs CPU BALANCE ---
+    ' --- RATIONALE: UI RESPONSIVENESS vs CPU BALANCE ---
     ' Set connection-related timeouts (Resolve, Connect, Send, Receive)
     WinHttpSetTimeouts hSession_, 2000, 2000, 5000, 100
     
@@ -344,7 +376,7 @@ Public Function Connect(ByVal wsUrl As String, ByVal localPort As Long) As Boole
     If headerRet <> 0 And status = 101 Then
         hWebSocket_ = WinHttpWebSocketCompleteUpgrade(hRequest_, 0)
 
-        ' [HANDLE FIX] The request handle and the WebSocket handle are independent.
+        ' INVARIANT (HANDLE OWNERSHIP): the request handle and the WebSocket handle are independent.
         ' If CompleteUpgrade fails, close the request handle and abort.
         If hWebSocket_ = 0 Then
             On Error Resume Next
@@ -354,7 +386,7 @@ Public Function Connect(ByVal wsUrl As String, ByVal localPort As Long) As Boole
             Err.Raise 520, "BiDiSocket", "WebSocket upgrade failed"
         End If
 
-        ' [HANDLE FIX] On success the request handle is no longer needed and must be
+        ' INVARIANT (HANDLE OWNERSHIP): on success the request handle is no longer needed and must be
         ' closed (per WinHTTP docs/official sample); the WebSocket handle stays valid.
         ' Not closing it would leak one request handle per connection.
         On Error Resume Next
@@ -429,7 +461,7 @@ Public Function SendMessage(ByVal Msg As String) As Boolean
     SetState StateError
     Disconnect keepErrorState:=True
     
-    ' [FIX] PROHIBIT RESENDING (Protocol Compliance)
+    ' INVARIANT (NO RESEND): protocol compliance
     ' W3C WebDriver BiDi mandates unique request IDs. Resending an identical JSON payload
     ' after a socket drop violates the protocol and corrupts the inflight request map.
     ' We heal the connection here, but strictly return False so the upper layer
@@ -443,7 +475,7 @@ Public Sub PostScript(ByVal Msg As String)
     SendMessage Msg
 End Sub
 
-' [Phase 1] FUNCTION: GetNextRequestId
+' FUNCTION: GetNextRequestId
 ' SUMMARY: Generates a unique sequential Request ID for BiDi commands.
 '          Migrated from Wrapper to consolidate protocol-level concerns.
 '          VBA is single-threaded and SendAndReceive is synchronous, so the sequential
@@ -455,7 +487,7 @@ Public Function GetNextRequestId() As Long
     GetNextRequestId = m_nextRequestId
 End Function
 
-' [Phase 1] FUNCTION: SendCommand
+' FUNCTION: SendCommand
 ' SUMMARY: High-level protocol command sender. Constructs the BiDi JSON envelope
 '          (id + method + params), validates payload size, serializes, and delegates
 '          to SendAndReceive for synchronous response retrieval.
@@ -549,14 +581,14 @@ Private Sub InternalCleanup()
     If hWebSocket_ <> 0 Then
         ' Attempt to send a close frame (Status 1000: Normal Closure).
         ' We don't wait for the server's response here to ensure the cleanup
-        ' remains fast and non-blocking during error or disconnect sequences.
+        ' remains fast and responsive during error or disconnect sequences.
         WinHttpWebSocketClose hWebSocket_, 1000, ByVal 0&, 0
         WinHttpCloseHandle hWebSocket_
         hWebSocket_ = 0
     End If
     
     If hRequest_ <> 0 Then
-        ' [HANDLE FIX] The request handle is independent of the WebSocket handle.
+        ' INVARIANT (HANDLE OWNERSHIP): the request handle is independent of the WebSocket handle.
         ' On the success path it was already closed in Connect (so this is skipped);
         ' here it only releases a handle left open by a failed/partial upgrade.
         WinHttpCloseHandle hRequest_
@@ -577,7 +609,7 @@ Private Sub InternalCleanup()
     ' If a connection drops mid-fragment, the residual bytes must be truncated
     ' before the next socket connection is established.
     If Not m_InStream Is Nothing Then
-        If m_InStream.state = adStateOpen Then
+        If m_InStream.State = adStateOpen Then
             m_InStream.Position = 0
             m_InStream.SetEOS
             m_InStream.Type = adTypeBinary
@@ -628,7 +660,7 @@ Public Function SendAndReceive(ByVal jsonMessage As String, Optional ByVal waitT
         End If
     End If
     
-    ' [FIX] Two-tier timeout strategy to distinguish between slow responses and
+    ' WHY: two-tier timeout strategy to distinguish between slow responses and
     '       genuine connection loss. Heavy SPAs (e.g., ServiceNow) can cause the
     '       browser to become temporarily unresponsive, but the WebSocket connection
     '       itself remains healthy. Previously, a single timeout immediately transitioned
@@ -710,7 +742,7 @@ Public Function SendAndReceive(ByVal jsonMessage As String, Optional ByVal waitT
     Loop
 
 Cleanup:
-    ' [FIX] Save Err info immediately to prevent overwrite during InternalCleanup.
+    ' WHY: save Err info immediately to prevent overwrite during InternalCleanup.
     Dim savedErrNum As Long: savedErrNum = Err.Number
     Dim savedErrDesc As String: savedErrDesc = Err.description
     Dim savedErrSrc As String: savedErrSrc = Err.source
@@ -722,7 +754,7 @@ Cleanup:
     
     m_isSendReceiving = False
     
-    ' [FIX] Handle cleanup is now conditional on the two-tier timeout strategy:
+    ' WHY: handle cleanup is conditional on the two-tier timeout strategy:
     '   - Soft timeout (604 without StateError): Connection is preserved.
     '     The caller (ExecuteBiDiCommand) can retry with the same socket.
     '   - Hard timeout (604 with StateError): Connection is presumed dead.
@@ -750,7 +782,7 @@ Private Function AttemptRecovery() As Boolean
     If m_isRecovering Then Exit Function
     m_isRecovering = True
     
-    ' [FIX] Route all runtime errors to the ErrorHandler to guarantee flag reset
+    ' WHY: route all runtime errors to the ErrorHandler to guarantee flag reset
     On Error GoTo ErrorHandler
 
     ' Pre-condition checks now route to CleanExit to properly release the lock
@@ -786,7 +818,7 @@ CleanExit:
     Exit Function
 
 ErrorHandler:
-    ' [CRITICAL 3 FIX] Prohibit Trace (File I/O) within the error handler.
+    ' INVARIANT (ERROR HANDLER): prohibit Trace (File I/O) within the error handler.
     ' If File I/O fails (e.g., file lock, permissions), a new exception occurs here,
     ' preventing Resume CleanExit from executing and leaving m_isRecovering=True forever.
     ' Debug.Print is non-throwing and safe in this context.
@@ -797,7 +829,7 @@ ErrorHandler:
     Resume CleanExit
 End Function
 
-' Non-blocking BiDi message pump; processes queued events and manages heartbeat.
+' Polling-based BiDi message pump; processes queued events and manages heartbeat.
 ' Optimized to prevent Excel UI freezing by using a micro-deadline for socket I/O.
 Public Function GetMessage() As String
     ' Block heartbeat/ping while a command response is pending in SendAndReceive
@@ -856,7 +888,7 @@ Public Function GetMessage() As String
     End If
 End Function
 
-' [Phase 2] FUNCTION: GetParsedEvent
+' FUNCTION: GetParsedEvent
 ' SUMMARY: Higher-level event retrieval that combines GetMessage + validation + JSON parse.
 '          Returns a parsed Dictionary object ready for dispatch, or Nothing if no
 '          valid event is available.
@@ -893,7 +925,7 @@ Public Function GetParsedEvent(Optional ByVal minMsgSize As Long = 10, _
     Set GetParsedEvent = parsed
 End Function
 
-' [Phase 3] Inflight Network Request Tracking API
+' Inflight Network Request Tracking API
 ' SUMMARY: Provides a centralized data store for tracking active network requests.
 '          The Wrapper calls these methods from DispatchGlobalEvents when processing
 '          network.beforeRequestSent / responseCompleted / fetchError events.
@@ -926,7 +958,7 @@ Public Property Get PendingRequestCount() As Long
     PendingRequestCount = m_pendingRequestCount
 End Property
 
-' [Phase 3] Direct write access for Wrapper's Hard-Sync correction.
+' Direct write access for Wrapper's Hard-Sync correction.
 ' Used by EvaluateSpaIdleCondition when JS reports zero activity but the VBA counter
 ' is stuck due to protocol desync (missed responseCompleted events).
 Public Property Let PendingRequestCount(ByVal value As Long)
@@ -957,7 +989,7 @@ Private Function ReadFromWire(Optional ByVal deadline As Double = 0) As String
     Dim ret As Long, bytesRead As Long, bufType As Long
     Dim isMessageFinished As Boolean
     Dim hasValidData As Boolean
-    ' [FIX] Counter to track fragment throughput
+    ' Counter to track fragment throughput
     Dim fragmentCount As Long: fragmentCount = 0
 
     If m_InStream.Position = 0 Then
@@ -1013,14 +1045,14 @@ Private Function ReadFromWire(Optional ByVal deadline As Double = 0) As String
                 
             Case WINHTTP_WEB_SOCKET_UTF8_FRAGMENT_BUFFER_TYPE, _
                  WINHTTP_WEB_SOCKET_BINARY_FRAGMENT_BUFFER_TYPE
-                ' [FIX] Prevent Excel freezing during high-volume fragment assembly
+                ' WHY: prevent Excel freezing during high-volume fragment assembly
                 fragmentCount = fragmentCount + 1
                 If fragmentCount Mod 20 = 0 Then
                     ' Yield to the OS message pump only if allowed by class settings
                     If m_AllowUiPump And Not m_isSendReceiving Then DoEvents
-                    ' [FIX] Removed "fragmentCount = 0" here. The Mod operator naturally
-                    ' cycles every 20 iterations. Resetting to 0 caused the next DoEvents
-                    ' to fire after 21 fragments instead of 20 (off-by-one).
+                    ' WHY: do not reset the counter here. The Mod operator cycles every 20
+                    ' iterations on its own; resetting to 0 would fire the next DoEvents
+                    ' after 21 fragments instead of 20 (off-by-one).
                 End If
                 
             Case Else
@@ -1091,10 +1123,10 @@ Public Function NowTicks() As Currency
     QueryPerformanceCounter NowTicks
 End Function
 
-Public Function elapsedMs(ByVal startTicks As Currency) As Double
+Public Function ElapsedMs(ByVal startTicks As Currency) As Double
     Dim cur As Currency
     QueryPerformanceCounter cur
-    elapsedMs = (CDbl(cur - startTicks) / CDbl(m_qpcFreq)) * 1000#
+    ElapsedMs = (CDbl(cur - startTicks) / CDbl(m_qpcFreq)) * 1000#
 End Function
 
 Public Function NowMs() As Double
@@ -1120,13 +1152,13 @@ Private Sub MaybeGrowBuffer(ByVal bytesRead As Long)
                 
                 If DEBUG_MODE Then Debug.Print "BiDi: Buffer grown to " & m_BufferSize
             Else
-                ' [FIX] Reset consecutive counter even when MAX_BUFFER_SIZE is reached
+                ' WHY: reset consecutive counter even when MAX_BUFFER_SIZE is reached
                 ' to prevent infinite accumulation.
                 m_RecentFullReads = 0
             End If
         End If
     Else
-        ' [FIX] Reset consecutive counter when a partial read occurs
+        ' WHY: reset consecutive counter when a partial read occurs
         m_RecentFullReads = 0
     End If
 End Sub
@@ -1220,7 +1252,7 @@ Private Function ExtractJsonId(ByVal json As String) As String
                             Dim j As Long: j = i + 8 ' Start right after "id"
                             Dim idVal As String
                             
-                            ' [HIGH FIX] Explicitly check both j and j+1 bounds in every iteration.
+                            ' Bounds safety: explicitly check both j and j+1 in every iteration.
                             ' This ensures no reliance on implicit mathematical safety (j <= bLen-1).
                             Do While j + 1 <= bLen
                                 ' Validate that the character is strictly within ASCII range
@@ -1320,7 +1352,7 @@ End Function
 Public Sub PumpMessages(Optional ByVal throttleMs As Long = 0)
     If m_isSendReceiving Then Exit Sub
     If throttleMs > 0 And m_lastPumpTicks <> 0 Then
-        If elapsedMs(m_lastPumpTicks) < throttleMs Then Exit Sub
+        If ElapsedMs(m_lastPumpTicks) < throttleMs Then Exit Sub
     End If
     DoEvents
     m_lastPumpTicks = NowTicks()
@@ -1546,7 +1578,7 @@ Public Function ExtractOrigin(ByVal url As String) As String
     End If
 End Function
 
-' Internal Helper: Performs a non-blocking sleep in small chunks.
+' Internal Helper: Performs an interruptible sleep in small chunks.
 ' It intelligently yields to the OS (DoEvents) only when it's safe to do so,
 ' ensuring that the WebSocket state machine is not corrupted by re-entrancy.
 Private Sub InterruptibleSleep(ByVal totalMs As Long, Optional ByVal allowDoEvents As Boolean = True)
@@ -1569,12 +1601,12 @@ Private Sub InterruptibleSleep(ByVal totalMs As Long, Optional ByVal allowDoEven
 End Sub
 
 ' Releases all WinHttp handles without sending a WebSocket close frame.
-Public Sub forceClose()
+Public Sub ForceClose()
     ' OERN SCOPE = ENTIRE PROCEDURE (no matching "On Error GoTo 0"): emergency
     ' teardown must never raise. Every handle release below is best-effort.
     On Error Resume Next
-    ' [FIX] Clear communication locks first, before any handle operations.
-    ' forceClose is the emergency exit path (called from Wrapper.Shutdown and
+    ' INVARIANT (TEARDOWN ORDER): clear communication locks first, before any handle operations.
+    ' ForceClose is the emergency exit path (called from Wrapper.Shutdown and
     ' Class_Terminate). If the caller was interrupted mid-SendAndReceive,
     ' these flags must be reset to prevent deadlock on reconnection.
     m_isSendReceiving = False
@@ -1584,7 +1616,7 @@ Public Sub forceClose()
     ' Skip WinHttpWebSocketClose (no close frame, no timeout).
     ' Directly release all WinHttp handles.
     '
-    ' [HANDLE FIX] The request handle is independent of the WebSocket handle.
+    ' INVARIANT (HANDLE OWNERSHIP): the request handle is independent of the WebSocket handle.
     ' On the success path it was already closed in Connect; here we simply close
     ' whatever handles are still open (best-effort emergency teardown).
     If hWebSocket_ <> 0 Then

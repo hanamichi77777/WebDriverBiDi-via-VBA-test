@@ -24,6 +24,40 @@ Option Explicit
 '   - AI-Ready Discovery Recorder
 '   - Advanced Wait Strategies (Network Idle, DOM Stability, SPA Idle)
 '
+' ==========================================================================
+' AI NAVIGATION MAP  (upper layer; transport lives in BiDiSocketCommunicator)
+' Read before editing any single method. This class is large by design (single
+' socket ownership); the risk is editing one method without seeing the funnel
+' or invariant it belongs to. See also the 4 Golden Rules block further below.
+'
+' [FUNNELS]  Route through these; never call the inner layers directly.
+'   User actions   : ExecuteClickByXPath / ExecuteInputValueByXPath /
+'                    ExecuteSelectValueByXPath / ExecuteNavigateAndGetStatus
+'   All JS          : CallScript -> (WrapInSafetyShell auto) -> ExecuteBiDiCommand -> socket_.SendAndReceive
+'   All interaction : ExecuteBaseAction = TryPreparePhase / TryExecutePhase / TrySyncPhase
+'   All waits       : MasterWaitEngine -> EvaluateWaitCondition -> EvaluateSpaIdleCondition
+'   All timing args : SanitizeMs (entry guard; supplies defaults when waitNetworkIdle is on)
+'
+' [STATE OWNERSHIP]  Mutate via the owner only; do not duplicate.
+'   Request ids / inflight count : BiDiSocketCommunicator (socket_), NOT this class
+'   Main context / realm cache   : this class (m_mainContextId, m_cachedRealmIds)
+'   Event subscriptions          : m_activeSubscriptions (delta-subscribe)
+'   Recorder state               : m_isRecording + ProcessRecorderQueue
+'   Idle filters                 : AddIdleIgnoreSelector / AddIdleIgnoreNetworkPattern
+'
+' [INVARIANTS]  Breaking these = deadlock, zombie UI lock, or protocol violation.
+'   UI LOCK        : m_waitStackDepth owns Application.Interactive; lock at depth 1 and
+'                    restore ONLY at depth 0 (CleanExit forces depth 0 on error).
+'   JS PATH        : never bypass CallScript; that is what auto-applies WrapInSafetyShell
+'                    (watchdog) and the heartbeat hb() closure. See Golden Rules below.
+'   RE-ENTRANCY    : do not DoEvents / PumpMessages while socket_ is mid SendAndReceive.
+'   CONSENSUS HALT : TrySyncPhase re-raises ONLY ERR_CONSENSUS_HALT; a plain 504 (DOM-only)
+'                    is swallowed best-effort. Keep the remap or network stalls stop halting.
+'   CDP RETENTION  : Network.setBlockedURLs via goog:cdp.sendCommand is a deliberate strategic
+'                    retention (resource blocking), not a stray CDP dependency.
+'   POSTSCRIPT     : send-only, fixed POST_SCRIPT_ID(2) in reserved band [1..99]; never awaits a reply.
+' ==========================================================================
+'
 ' NOTE ON ERROR HANDLING STRATEGY (Strategic Buffer):
 ' This class utilizes "On Error Resume Next" (OERN) in specific interaction segments.
 ' The WebDriver BiDi protocol is highly asynchronous. In high-speed scenarios (e.g.,
@@ -40,12 +74,10 @@ Private m_useTrustedClick As Boolean        ' default False -> synthetic JS clic
 Private Const DEBUG_MODE As Boolean = True
 
 ' --- Foundation: ID Management ---
-' [Phase 1] m_nextRequestId has been migrated to BiDiSocketCommunicator.
-'           Wrapper accesses it via socket_.GetNextRequestId() when needed.
-' [Phase 3] m_inflightRequests and m_pendingRequestCount have been migrated to
-'           BiDiSocketCommunicator. Wrapper accesses via socket_.TrackInflightRequest,
-'           socket_.UntrackInflightRequest, socket_.ResetInflightTracking, and
-'           socket_.PendingRequestCount.
+' Request IDs and inflight tracking are owned by BiDiSocketCommunicator (see
+' AI NAVIGATION MAP). Wrapper accesses them via socket_.GetNextRequestId,
+' socket_.TrackInflightRequest / UntrackInflightRequest / ResetInflightTracking,
+' and socket_.PendingRequestCount.
 
 ' --- Recovery & Stability ---
 Private m_isRecovering As Boolean
@@ -69,7 +101,7 @@ Private m_lastHudRetryTick As Currency ' Throttle timestamp for HUD send retries
 ' --- Internal State Variables ---
 Private m_mainContextId As String
 Private m_cdpSessionId As String
-' [Phase 3] m_pendingRequestCount moved to Communicator (socket_.PendingRequestCount)
+' m_pendingRequestCount lives in Communicator (socket_.PendingRequestCount)
 Private m_lastJsNow As Double ' Heartbeat tracker (performance.now from JS)
 Private m_cachedRealmIds As Dictionary ' Cached Execution Realm ID
 Private m_validatedContexts As Dictionary ' Context IDs confirmed present in the tree (skips repeat getTree)
@@ -163,14 +195,14 @@ Private Sub Class_Initialize()
     ' Ensures all tracking objects are instantiated for re-entrancy safety.
     Set socket_ = New BiDiSocketCommunicator
     Set m_activeSubscriptions = New Dictionary
-    ' [Phase 3] m_inflightRequests moved to Communicator (initialized in its Class_Initialize)
+    ' m_inflightRequests lives in Communicator (initialized in its Class_Initialize)
     Set m_cachedRealmIds = New Dictionary
     Set m_validatedContexts = New Dictionary
     Set m_blockingPatterns = New Collection
     
     ' --- 2. Request ID Seeding ---
-    ' [Phase 1] Request ID generation is now managed by BiDiSocketCommunicator.
-    ' [Phase 3] Inflight tracking is now managed by BiDiSocketCommunicator.
+    ' Request ID generation is managed by BiDiSocketCommunicator.
+    ' Inflight tracking is managed by BiDiSocketCommunicator.
 
     ' --- 3. State Reset ---
     m_waitStackDepth = 0
@@ -183,7 +215,7 @@ End Sub
 Public Sub ConnectTo(ByVal webSocketUrl As String)
     Me.ClearState
     
-    ' [FIX] Fail fast on an empty URL. The most common cause is forgetting to call
+    ' WHY: fail fast on an empty URL. The most common cause is forgetting to call
     ' caps.EnableBiDiMode before OpenBrowser, which leaves GetWebSocketUrl empty.
     If Len(Trim$(webSocketUrl)) = 0 Then
         Err.Raise ERR_CONNECT_FAILED, "BiDiCommandWrapper:ConnectTo", _
@@ -191,10 +223,10 @@ Public Sub ConnectTo(ByVal webSocketUrl As String)
             "then pass driver.GetWebSocketUrl to ConnectTo."
     End If
 
-    ' [FIX] AttemptAutoConnect returns False on failure instead of raising; the old
-    ' code ignored the result and only failed later inside the first subscribe call
-    ' with a misleading recovery error (600). A short retry additionally absorbs
-    ' transient WebSocket-handshake timeouts on a busy machine.
+    ' WHY: AttemptAutoConnect returns False on failure instead of raising, so the
+    ' result must be checked here; otherwise failure surfaces later inside the first
+    ' subscribe call as a misleading recovery error (600). A short retry additionally
+    ' absorbs transient WebSocket-handshake timeouts on a busy machine.
     Dim attempt As Long
     Dim connected As Boolean
     For attempt = 1 To 3
@@ -291,7 +323,7 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
                 If m_validatedContexts.Exists(m_navigationContextId) Then m_validatedContexts.Remove m_navigationContextId
             End If
 
-            ' [Phase 3] Reset inflight network request tracking via Communicator.
+            ' Reset inflight network request tracking via Communicator.
             If m_navigationContextId = m_mainContextId Then
                 socket_.ResetInflightTracking
             End If
@@ -405,7 +437,7 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
 End Sub
 
 Public Property Get PendingRequestCount() As Long
-    ' [Phase 3] Delegated to Communicator
+    ' Delegated to Communicator
     PendingRequestCount = socket_.PendingRequestCount
 End Property
 
@@ -957,12 +989,12 @@ Private Function ExecuteBrowsingContextNavigate(ByVal url As String, _
                                                 
     Dim targetCtx As String: targetCtx = ResolveTargetContext(contextId)
     
-    ' [FIX] Reset only transient navigation/network state.
-    ' [Phase 3] Reset inflight tracking via Communicator so stale request IDs
+    ' WHY: reset only transient navigation/network state.
+    ' Reset inflight tracking via Communicator so stale request IDs
     ' from the previous page do not cause count mismatches.
     socket_.ResetInflightTracking
     
-    ' [FIX] Capture the TARGET URL's origin before the navigate command fires.
+    ' INVARIANT (ORDERING): capture the TARGET URL's origin before the navigate command fires.
     ' This is compared against the post-navigation URL (from the BiDi response) to
     ' detect redirect-induced cross-origin transitions. If the browser redirected to
     ' a different origin, the CDP session attached to the previous target is invalid.
@@ -982,7 +1014,7 @@ Private Function ExecuteBrowsingContextNavigate(ByVal url As String, _
     strRes = ExecuteBiDiCommand("browsingContext.navigate", params)
     Dim navJson As Object: Set navJson = ValidateProtocolResponse(strRes, "browsingContext.navigate")
 
-    ' [FIX] Cross-origin CDP session invalidation.
+    ' WHY: cross-origin CDP session invalidation.
     ' If the navigation target is a different origin, the CDP session attached to
     ' the previous document is no longer valid. Clearing m_cdpSessionId forces
     ' lazy re-acquisition via GetCdpSessionId on the next CDP command.
@@ -1701,7 +1733,7 @@ Private Function ExecuteBiDiCommand(ByVal method As String, _
     ' Retry Loop: Attempt to recover from transient environment or socket failures.
     Do While retryCount <= MAX_CONTEXT_RECOVERY_RETRIES
         
-        ' 1. [Phase 1] Delegate ID generation, payload construction, size validation,
+        ' 1. Delegate ID generation, payload construction, size validation,
         '    serialization, and transmission to Communicator's SendCommand.
         '    Logging is also handled by SendCommand when Silent=False.
         On Error Resume Next
@@ -1786,8 +1818,8 @@ Private Function ExecuteBiDiCommand(ByVal method As String, _
               "Last Error: " & localErrDesc
 End Function
 
-' --- [Phase 1] LogTransmission is retained for retry-context logging ---
-' Note: Primary REQ/RES logging is now handled by socket_.SendCommand.
+' --- LogTransmission is retained for retry-context logging ---
+' Note: primary REQ/RES logging is handled by socket_.SendCommand.
 '       This helper is kept for recovery-phase diagnostic logging where
 '       the retry attempt number is needed for analysis.
 Private Sub LogTransmission(ByVal method As String, ByVal id As Long, ByVal Msg As String, ByVal prefix As String, ByVal attempt As Long)
@@ -1892,10 +1924,10 @@ Public Sub ClearState()
     m_cdpSessionId = ""
     m_mainContextId = ""
     
-    ' [Phase 3] Reset inflight tracking via Communicator
+    ' Reset inflight tracking via Communicator
     If Not socket_ Is Nothing Then socket_.ResetInflightTracking
 
-    ' [FIX] Use New Dictionary instead of Nothing for m_cachedRealmIds.
+    ' INVARIANT (JIT INIT): use New Dictionary instead of Nothing for m_cachedRealmIds.
     ' Prevents Error 424 if other methods access the cache before JIT initialization.
     Set m_cachedRealmIds = New Dictionary
     Set m_validatedContexts = New Dictionary
@@ -2001,10 +2033,10 @@ Private Function GetScriptRealmId(Optional ByVal contextId As String = "", _
     If contextId <> "" Then targetCtx = contextId Else targetCtx = GetMainContextId()
     If targetCtx = "" Then Exit Function
 
-    ' [FIX] Initialize the cache dictionary JIT (Just-In-Time)
+    ' Initialize the cache dictionary JIT (Just-In-Time)
     If m_cachedRealmIds Is Nothing Then Set m_cachedRealmIds = New Dictionary
 
-    ' [FIX] Check for context-specific cached realm ID
+    ' Check for context-specific cached realm ID
     If Not forceRefresh Then
         If m_cachedRealmIds.Exists(targetCtx) Then
             GetScriptRealmId = m_cachedRealmIds(targetCtx)
@@ -2054,7 +2086,7 @@ Private Function GetScriptRealmId(Optional ByVal contextId As String = "", _
         End If
     End If
     
-    ' [FIX] Cache the found Realm ID using the contextId as the unique key
+    ' Cache the found Realm ID using the contextId as the unique key
     If foundRealmId <> "" Then
         m_cachedRealmIds(targetCtx) = foundRealmId
     End If
@@ -2200,7 +2232,7 @@ End Sub
 
 ' [FIXED] StopAndSaveDiscoveryLog with explicit memory cleanup
 Public Sub StopAndSaveDiscoveryLog(ByVal filePath As String)
-    ' [FIX] Flush the incoming message queue first.
+    ' Flush the incoming message queue first.
     ' Since ProcessRecorderQueue calls DispatchGlobalEvents, which checks m_isRecording,
     ' we must process the queue while the flag is still True.
     Call ProcessRecorderQueue
@@ -2339,7 +2371,7 @@ Public Sub RecordEventsForSeconds(ByVal seconds As Long)
     Loop
 
 Cleanup:
-    ' [FIX] Always reset the processing lock regardless of how the loop finished.
+    ' WHY: always reset the processing lock regardless of how the loop finished.
     ' If an error occurred inside ProcessRecorderQueue, this flag must be cleared
     ' to allow subsequent message processing.
     m_isProcessingQueue = False
@@ -2351,7 +2383,7 @@ Cleanup:
     Exit Sub
 
 ErrorHandler:
-    ' [FIX v2] Properly deactivate the error handler via Resume before cleanup.
+    ' WHY: properly deactivate the error handler via Resume before cleanup.
     ' Without Resume, VBA's error handler remains "active" after GoTo Cleanup.
     ' If any statement in Cleanup raises a new error while the handler is active,
     ' VBA terminates the call stack immediately instead of handling it gracefully.
@@ -2361,7 +2393,7 @@ End Sub
 
 ' PUBLIC SUB: ProcessRecorderQueue
 '  Processes the incoming message queue with re-entrancy protection.
-'          [Phase 2] Simplified: JSON retrieval, validation, and parsing are now
+'          Simplified: JSON retrieval, validation, and parsing are now
 '          delegated to Communicator's GetParsedEvent(). This method focuses purely
 '          on dispatch logic and error management.
 Public Sub ProcessRecorderQueue()
@@ -2379,7 +2411,7 @@ Public Sub ProcessRecorderQueue()
     
     ' Main processing loop
     Do While processedCount < MAX_MESSAGES_PER_BATCH
-        ' [Phase 2] Delegate message retrieval + size validation + JSON parse
+        ' Delegate message retrieval + size validation + JSON parse
         ' to Communicator. Returns Nothing if buffer is empty or message invalid.
         Set json = socket_.GetParsedEvent(MIN_MSG_SIZE, MAX_MSG_SIZE)
         If json Is Nothing Then Exit Do
@@ -2442,7 +2474,7 @@ Private Function IsIgnorableError(ByVal errType As String, ByVal errMsg As Strin
 End Function
 
 Private Sub FormatAndStoreLog(ByVal json As Object)
-    ' [FIX v2] Replaced On Error Resume Next with explicit key existence checks.
+    ' WHY: explicit key existence checks instead of On Error Resume Next.
     ' OERN was masking structural errors (e.g., missing "url" key on a valid "request"
     ' object). Each access is now guarded by Dictionary.Exists() or TypeName checks,
     ' ensuring only genuinely missing payloads are skipped while real bugs surface.
@@ -2908,7 +2940,7 @@ Private Sub RecoverSpaProbe(ByVal contextId As String)
     ' Determine if we are recovering the main context (empty or matching current main)
     isMainTarget = (targetId = "" Or targetId = m_mainContextId)
 
-    ' [FIX] Resolve empty contextId to mainContextId BEFORE cache operations.
+    ' WHY: resolve empty contextId to mainContextId BEFORE cache operations.
     If targetId = "" Then targetId = m_mainContextId
 
     If Not m_cachedRealmIds Is Nothing Then
@@ -2921,7 +2953,7 @@ Private Sub RecoverSpaProbe(ByVal contextId As String)
     ' We capture the result of the discovery to get the most current ID.
     Dim refreshedMainId As String: refreshedMainId = UpdateMainContextId(True, True)
     
-    ' 3. [FIX] ID Synchronization
+    ' 3. ID Synchronization
     ' If we were targeting the main context, we must use the refreshed ID.
     ' Otherwise, StartSpaIdleProbe would target a stale/dead context ID.
     If isMainTarget Then
@@ -3047,7 +3079,7 @@ Private Function EvaluateSpaIdleCondition(ByVal probe As Dictionary, _
     End If
 
     ' --- 4. Self-Correction Logic (Hard-Sync) ---
-    ' [Phase 3] Access and write via Communicator property.
+    ' Access and write via Communicator property.
     If (inflFetch = 0 And inflXhr = 0) And (socket_.PendingRequestCount > 0) Then
         If jsIdleDuration > (CDbl(minStableMs) * 2#) Then
             If DEBUG_MODE Then Debug.Print "BiDi: Hard-Syncing pendingRequestCount to 0 due to prolonged silence."
@@ -3100,7 +3132,7 @@ Private Function ExecuteCDPCommand(ByVal cdpMethod As String, _
         Set ExecuteCDPCommand = res: Exit Function
     End If
 
-    ' --- [FIX] Trigger state reset if CDP failures exceed limit ---
+    ' --- Trigger state reset if CDP failures exceed limit ---
     If m_consecutiveCdpFailures >= MAX_CONSECUTIVE_CDP_FAILURES Then
         ' Correctly calls the actual Sub PerformFatalReset instead of jumping to a label
         Call PerformFatalReset
@@ -3380,7 +3412,7 @@ End Function
 '   THIS CONTRACT IS EXPERIMENTALLY VERIFIED:
 '   Confirmed that Excel whites out and fails to recover even after 30 seconds
 '   when executing 'while(true) {}'.
-' ========================================================================================' ========================================================================================
+' ========================================================================================
 Public Function CallScript(ByVal js As String, _
                            Optional ByVal args As Collection = Nothing, _
                            Optional ByVal contextId As String = "", _
@@ -3401,7 +3433,7 @@ Public Function CallScript(ByVal js As String, _
     Dim finalJs As String: finalJs = WrapInSafetyShell(js, safetyTimeoutMs)
 
     If forceRealmTarget Then
-        ' FIX: Pass the Silent flag to the internal realm discovery call
+        ' Pass the Silent flag to the internal realm discovery call
         targetDic.Add "realm", GetScriptRealmId(resolvedCtx, False, Silent)
     Else
         targetDic.Add "context", resolvedCtx
@@ -3430,7 +3462,7 @@ End Function
 Private Function IsTimeout(ByVal startTicks As Currency, ByVal timeoutMs As Double) As Boolean
     If timeoutMs <= 0 Then Exit Function
     ' Simple comparison
-    IsTimeout = socket_.elapsedMs(startTicks) > timeoutMs
+    IsTimeout = socket_.ElapsedMs(startTicks) > timeoutMs
 End Function
 
 ' Internal Helper: Centralizes background tasks during a wait loop.
@@ -3590,7 +3622,7 @@ Private Function MasterWaitEngine(ByVal mode As waitMode, _
         ' --- REFINED TELEMETRY GATING ---
         ' Uses dedicated instance-level timer to poll UpdateWaitTelemetry every 100ms.
         ' This is independent of DoEvents frequency to ensure a stable HUD refresh rate.
-        If socket_.elapsedMs(m_lastTelemetryTick) > 100 Then
+        If socket_.ElapsedMs(m_lastTelemetryTick) > 100 Then
             Call UpdateWaitTelemetry(mode, ctx)
             m_lastTelemetryTick = socket_.NowTicks()
         End If
@@ -3744,14 +3776,14 @@ Private Sub WriteSpaWaitEnd(ByVal outcome As String, _
     If ctx.Exists("lastInflFetch") Then inflFetch = CLng(ctx("lastInflFetch"))
     If ctx.Exists("lastInflXhr") Then inflXhr = CLng(ctx("lastInflXhr"))
 
-    Dim elapsedMs As Double: elapsedMs = socket_.elapsedMs(startTick)
+    Dim ElapsedMs As Double: ElapsedMs = socket_.ElapsedMs(startTick)
     Dim slackMs As Double: slackMs = domQuietMs - CDbl(minStableMs)
 
     Dim relTime As String
     relTime = Format((socket_.NowMs() / 1000) - m_recorderStartTime, "0.00") & "s"
 
     m_recorderLogs.Add "[" & relTime & "] [SPA-WAIT-END] " & outcome & _
-                       " | elapsedMs=" & Format(elapsedMs, "0") & _
+                       " | elapsedMs=" & Format(ElapsedMs, "0") & _
                        " | domQuietMs=" & Format(domQuietMs, "0") & _
                        " | slackMs=" & Format(slackMs, "0") & _
                        " | minStableMs=" & minStableMs & _
@@ -3808,7 +3840,7 @@ Private Function EvaluateWaitCondition(ByVal mode As waitMode, ByRef ctx As Dict
                 Set probe = Nothing
             Else
                 ' --- Path B: Probe is missing (Navigation, Crash, or Context Swap) ---
-                ' [FIX] Probe gone => ctx("lastInflightUrls") (JS-probe sourced) is
+                ' Probe gone => ctx("lastInflightUrls") (JS-probe sourced) is
                 ' stale. Drop it so a later timeout isn't misread as a network stall
                 ' and escalated from an absorbable 504/505 to a hard HALT. Path A
                 ' repopulates it on the next live poll.
@@ -4128,7 +4160,7 @@ Private Function ResolveXPathOrThrow(ByVal xpath As String, _
     Dim sid As String
     Dim targetCtx As String
     
-    ' 0. [FIX] Null Byte Sanitization: Reject strings containing Chr$(0).
+    ' 0. Null Byte Sanitization: reject strings containing Chr$(0).
     If InStr(xpath, Chr$(0)) > 0 Then
         Err.Raise ERR_ACTION_FAILED, "BiDi:" & methodName, _
                   "XPath contains null byte (Chr$(0)) which would corrupt the WebSocket message. Sanitize input before calling."
@@ -4247,7 +4279,7 @@ Public Sub WaitForUrlStability(Optional ByVal contextId As String = "", _
         ' Global timeout check to prevent infinite loops
         If (socket_.NowMs() - startMs) > CDbl(vTimeoutMs) Then Exit Do
         
-        ' [FIX] Adaptive yielding:
+        ' Adaptive yielding:
         ' If recording is active or network requests are pending, maintain queue sync.
         ' Otherwise, yield via Communicator for high-speed URL change detection.
         If m_isRecording Or (socket_.PendingRequestCount > 0) Then
@@ -4293,7 +4325,7 @@ End Function
 ' [PRIVATE] HandleConsoleLog
 '  Formats and prints browser console logs to the VBA Immediate Window.
 Private Sub HandleConsoleLog(ByVal json As Object)
-    ' [FIX v2] Removed blanket OERN. GetPathString already returns "" for missing paths
+    ' WHY: no blanket OERN here. GetPathString already returns "" for missing paths
     ' without raising errors, so the OERN wrapper was unnecessary and could mask
     ' unrelated bugs (e.g., a corrupted json object reference).
     Dim text As String: text = GetPathString(json, "params.text")
@@ -4307,7 +4339,7 @@ End Sub
 ' METHOD: Shutdown
 '  Explicitly releases all BiDi/CDP resources.
 '          This should be called before setting the object to Nothing.
-Public Sub Shutdown(Optional ByVal forceClose As Boolean = True)
+Public Sub Shutdown(Optional ByVal ForceClose As Boolean = True)
     If socket_ Is Nothing Then Exit Sub
     ' OERN SCOPE = REST OF PROCEDURE. No matching "On Error GoTo 0" follows by design:
     ' resource release is best-effort. If detach/forceClose fails (connection already
@@ -4329,8 +4361,8 @@ Public Sub Shutdown(Optional ByVal forceClose As Boolean = True)
     ClearState
     
     ' --- 4. Communication Socket Release ---
-    If forceClose Then
-        socket_.forceClose
+    If ForceClose Then
+        socket_.ForceClose
     End If
     Set socket_ = Nothing
     
@@ -4387,7 +4419,7 @@ Private Sub UpdateWaitTelemetry(ByVal mode As waitMode, ByRef ctx As Dictionary)
     
     ' --- 4. ERROR THROTTLING ---
     If m_lastHudRetryTick > 0 Then
-        If socket_.elapsedMs(m_lastHudRetryTick) < 500 Then Exit Sub
+        If socket_.ElapsedMs(m_lastHudRetryTick) < 500 Then Exit Sub
     End If
     
     ' --- 5. JavaScript Construction ---
@@ -4459,7 +4491,7 @@ Public Function ExecuteEnableGlobalShadowUnlocker() As String
     End If
 End Function
 
-' [Phase 1] FUNCTION: GetNextRequestId
+' FUNCTION: GetNextRequestId
 '  Delegated to Communicator. This stub is retained for backward compatibility
 '          with any external callers (e.g., PostScript's manual payload construction).
 '          Internal callers (ExecuteBiDiCommand) now use socket_.SendCommand directly.
@@ -4730,7 +4762,7 @@ Private Function GetPathString(ByVal root As Object, ByVal Path As String) As St
 End Function
 
 Private Function GetPathObject(ByVal root As Object, ByVal Path As String) As Object
-    ' [FIX v2] Explicit type check replaces blanket OERN.
+    ' WHY: explicit type check instead of blanket OERN.
     ' GetPathValue returns Variant; we must verify it's an Object before Set.
     Dim v As Variant: Assign v, GetPathValue(root, Path)
     If IsObject(v) Then Set GetPathObject = v
@@ -4738,7 +4770,7 @@ Private Function GetPathObject(ByVal root As Object, ByVal Path As String) As Ob
 End Function
 
 Private Function GetCleanResult(ByVal jsonRaw As String) As Variant
-    ' [FIX v2] Narrowed OERN scope to ParseJson only. ParseJson can legitimately fail
+    ' WHY: OERN scope is narrowed to ParseJson only. ParseJson can legitimately fail
     ' on malformed/empty input, but errors in GetPathValue or Assign should propagate
     ' since they indicate structural bugs in the response pipeline.
     If Len(jsonRaw) = 0 Then GetCleanResult = Empty: Exit Function
