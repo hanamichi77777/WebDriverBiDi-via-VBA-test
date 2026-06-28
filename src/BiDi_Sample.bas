@@ -39,6 +39,7 @@ Public Sub Main01()
   .OpenBrowser caps
   ' ==========================================
    Dim bidi As New BiDiCommandWrapper: bidi.ConnectTo .GetWebSocketUrl
+   'bidi.DebugMode = False  'Mute developer trace in the Immediate window (default: On)
   ' ==========================================
           
 ' --- 1. Execute BiDi Commands ---

@@ -71,7 +71,7 @@ Option Explicit
 ' Dependencies: BiDiSocketCommunicator, WebJsonConverter, Microsoft Scripting Runtime
 Private socket_ As BiDiSocketCommunicator
 Private m_useTrustedClick As Boolean        ' default False -> synthetic JS clicks (proven path); True = trusted pointer clicks (opt-in)
-Private Const DEBUG_MODE As Boolean = True
+Private m_debugMode As Boolean              ' Backing field for the DebugMode property. Default On; set in Class_Initialize.
 
 ' --- Foundation: ID Management ---
 ' Request IDs and inflight tracking are owned by BiDiSocketCommunicator (see
@@ -208,6 +208,13 @@ Private Sub Class_Initialize()
     m_waitStackDepth = 0
     m_consecutiveCdpFailures = 0
     m_isProcessingQueue = False
+
+    ' --- 4. Diagnostics ---
+    ' DebugMode defaults On (developer protocol/action trace -> Immediate window).
+    ' User-settable at runtime via the public DebugMode property. NOTE: this governs
+    ' only this class's high-level trace; the low-level wire log is the separate
+    ' DEBUG_MODE constant inside BiDiSocketCommunicator.
+    m_debugMode = True
 End Sub
 
 ' METHOD: ConnectTo
@@ -277,7 +284,7 @@ Private Sub Class_Terminate()
     ' Explicitly shuts down the socket and detaches any active CDP tunnels.
     Call Shutdown
     
-    If DEBUG_MODE Then
+    If m_debugMode Then
         Debug.Print "BiDiCommandWrapper: Terminated and UI protection released."
     End If
 End Sub
@@ -331,7 +338,7 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
             ' Log only when the navigation occurs in the main context.
             ' Sub-frame navigations (iframes) are handled silently to reduce log noise,
             ' as they are not consumed by the Predictive Recovery path (context mismatch).
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 If m_navigationContextId = m_mainContextId Then
                     Debug.Print "BiDi: Navigation detected in main context " & _
                                 Left$(m_navigationContextId, 16) & "... (Probe pre-invalidated, inflight reset)"
@@ -414,7 +421,7 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
             ' tokens, the failure is unambiguously our doing. Other fetchError
             ' causes (DNS failure, server hangup, unrelated cancellation) do
             ' not match any token and fall through silently.
-            If DEBUG_MODE And method = "network.fetchError" Then
+            If m_debugMode And method = "network.fetchError" Then
                 Dim blockedUrl As String
                 blockedUrl = GetPathString(json, "params.request.url")
                 If Len(blockedUrl) > 0 And m_blockingPatterns.count > 0 Then
@@ -835,7 +842,7 @@ Public Function ExecuteEnableResourceBlocking(ByVal patterns As Variant) As Stri
             If Len(token) > 0 Then m_blockingPatterns.Add token
         Next
         
-        If DEBUG_MODE Then
+        If m_debugMode Then
             Debug.Print "CDP ResourceBlocking: ENABLED. " & urlList.count & " URL pattern(s) installed."
         End If
         ExecuteEnableResourceBlocking = resObj("Json")
@@ -947,7 +954,7 @@ Public Function ExecuteSessionSubscribe(ByVal events As Variant, _
         Next i
 
         If eventsToRequest.count = 0 Then
-            If DEBUG_MODE And Not Silent Then Debug.Print "BiDi: Subscription skipped (already active)."
+            If m_debugMode And Not Silent Then Debug.Print "BiDi: Subscription skipped (already active)."
         Else
             ReDim finalArr(eventsToRequest.count - 1)
             i = 0
@@ -1027,7 +1034,7 @@ Private Function ExecuteBrowsingContextNavigate(ByVal url As String, _
     If preNavOrigin <> "" And postNavOrigin <> "" Then
         If LCase$(preNavOrigin) <> LCase$(postNavOrigin) Then
             m_cdpSessionId = ""
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 Debug.Print "BiDi: CDP session invalidated (cross-origin: " & _
                             preNavOrigin & " -> " & postNavOrigin & ")"
             End If
@@ -1113,7 +1120,7 @@ Public Function ExecuteInputValueByXPath(ByVal xpath As String, _
         
         ' Phase 2: dispatch keystrokes via input.performActions on the active element.
         ExecuteInputValueByXPath = PerformNativeKeyInput(targetCtx, valueToSet, maxTimeoutMs, waitNetworkIdle, minStableMs)
-        If DEBUG_MODE Then Debug.Print "BiDi: Action 'native_keys' completed."
+        If m_debugMode Then Debug.Print "BiDi: Action 'native_keys' completed."
     ElseIf Not useKeyEvents Then
         ' FAST MODE: Bulk execCommand('insertText') via standard pipeline.
         ExecuteInputValueByXPath = ExecuteBaseAction(targetCtx, "input", args, waitNetworkIdle, minStableMs, True, DEFAULT_STALE_RETRIES, maxTimeoutMs)
@@ -1128,7 +1135,7 @@ Public Function ExecuteInputValueByXPath(ByVal xpath As String, _
         
         ExecuteInputValueByXPath = CallScript( _
             GetActionJs("input_keys"), args, targetCtx, False, False, keySafetyMs)
-        If DEBUG_MODE Then Debug.Print "BiDi: Action 'input_keys' completed."
+        If m_debugMode Then Debug.Print "BiDi: Action 'input_keys' completed."
     End If
 End Function
 
@@ -1163,7 +1170,7 @@ Public Function ExecuteSetFilesByXPath(ByVal xpath As String, _
     paths = NormalizeFilePaths(filePaths)
     
     ExecuteSetFilesByXPath = PerformSetFiles(targetCtx, sharedId, paths, maxTimeoutMs, waitNetworkIdle, minStableMs)
-    If DEBUG_MODE Then Debug.Print "BiDi: Action 'set_files' completed."
+    If m_debugMode Then Debug.Print "BiDi: Action 'set_files' completed."
 End Function
 
 ' [INTERNAL] NormalizeFilePaths
@@ -1394,7 +1401,7 @@ Private Function PerformTrustedClick(ByVal contextId As String, _
         trustedOk = (Err.Number = 0)
         On Error GoTo 0
         If trustedOk Then
-            If DEBUG_MODE Then Debug.Print "BiDi: TRUSTED click (on-target)."
+            If m_debugMode Then Debug.Print "BiDi: TRUSTED click (on-target)."
             PerformTrustedClick = res
             Exit Function
         End If
@@ -1406,7 +1413,7 @@ Private Function PerformTrustedClick(ByVal contextId As String, _
         ' For strict mode (never click hidden/covered), enable instead:
         '   Err.Raise ERR_ACTION_FAILED, "BiDi:PerformTrustedClick", _
         '       "Target not hittable at center (covered/hidden)."
-        If DEBUG_MODE Then Debug.Print "BiDi: not on-target; node click fallback."
+        If m_debugMode Then Debug.Print "BiDi: not on-target; node click fallback."
     End If
 
     ' Node-addressed untrusted JS click: always hits the correct target.
@@ -1536,7 +1543,7 @@ Private Function GetFindElementSharedIdByXPath(ByVal xpath As String, _
     Dim sid As String
     Dim attemptCount As Long: attemptCount = 0
     
-    If DEBUG_MODE Then
+    If m_debugMode Then
         Debug.Print "BiDi: Searching for [" & xpath & "] (Timeout: " & _
                     IIf(isImmediate, "Immediate", vTimeoutMs & "ms") & ")"
     End If
@@ -1694,7 +1701,7 @@ Public Function ExecuteLazyLoadScroll(Optional ByVal scrollTimeoutMs As Long = 2
 
     If vMaxTimeout <= vScrollTimeout + SCROLL_SAFETY_MARGIN_MS Then
         vMaxTimeout = vScrollTimeout + SCROLL_SAFETY_MARGIN_MS
-        If DEBUG_MODE Then _
+        If m_debugMode Then _
             Debug.Print "[BiDi LazyScroll] maxTimeout auto-raised to " & vMaxTimeout & _
                         "ms to fit scroll budget (" & vScrollTimeout & "ms) + margin."
     End If
@@ -1783,7 +1790,7 @@ Private Function ExecuteBiDiCommand(ByVal method As String, _
             ' Progressive Wait: Increase wait time based on the retry attempt.
             WaitHeartbeat 800 * (retryCount + 1)
             
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 Debug.Print "BiDi [RECOVERY]: Attempting to refresh context (" & (retryCount + 1) & "/" & MAX_CONTEXT_RECOVERY_RETRIES & ")..."
             End If
             
@@ -2056,7 +2063,7 @@ Private Function GetScriptRealmId(Optional ByVal contextId As String = "", _
     On Error GoTo 0
     
     If realmErr <> 0 Then
-        If DEBUG_MODE Then
+        If m_debugMode Then
             Debug.Print "BiDi: getRealms failed for context " & Left$(targetCtx, 16) & _
                         "... (Err " & realmErr & ": " & realmErrDesc & ")"
         End If
@@ -2423,7 +2430,7 @@ Public Sub ProcessRecorderQueue()
         
         If Err.Number <> 0 Then
             consecutiveErrors = consecutiveErrors + 1
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 Debug.Print "BiDi: Dispatch error #" & consecutiveErrors & ": " & Err.description
             End If
             Err.Clear
@@ -2963,7 +2970,7 @@ Private Sub RecoverSpaProbe(ByVal contextId As String)
     ' This ensures the SPA monitoring script is active on the new page state.
     StartSpaIdleProbe targetId
     
-    If DEBUG_MODE Then Debug.Print "BiDi: Recovery completed for context: " & targetId
+    If m_debugMode Then Debug.Print "BiDi: Recovery completed for context: " & targetId
 End Sub
 
 ' PUBLIC SUB: WaitForNetworkIdleSpa
@@ -3067,7 +3074,7 @@ Private Function EvaluateSpaIdleCondition(ByVal probe As Dictionary, _
                 logSummary = Trim(logSummary)
                 
                 If Len(logSummary) > 500 Then logSummary = Left$(logSummary, 497) & "..."
-                If DEBUG_MODE Then Debug.Print "[BiDi SPA Activity] " & logSummary
+                If m_debugMode Then Debug.Print "[BiDi SPA Activity] " & logSummary
                 
                 If m_isRecording Then
                     Dim relTime As String
@@ -3082,7 +3089,7 @@ Private Function EvaluateSpaIdleCondition(ByVal probe As Dictionary, _
     ' Access and write via Communicator property.
     If (inflFetch = 0 And inflXhr = 0) And (socket_.PendingRequestCount > 0) Then
         If jsIdleDuration > (CDbl(minStableMs) * 2#) Then
-            If DEBUG_MODE Then Debug.Print "BiDi: Hard-Syncing pendingRequestCount to 0 due to prolonged silence."
+            If m_debugMode Then Debug.Print "BiDi: Hard-Syncing pendingRequestCount to 0 due to prolonged silence."
             socket_.PendingRequestCount = 0
         End If
     End If
@@ -3098,7 +3105,7 @@ Private Function EvaluateSpaIdleCondition(ByVal probe As Dictionary, _
     If netIdle And activityStable Then
         ' Check if the stable state has persisted for the designated window.
         If (currentMs - CDbl(ctx("stableStart"))) >= CDbl(minStableMs) Then
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 Call socket_.LogEvent("Consensus reached (" & minStableMs & "ms window satisfied)", "", ">>> [BiDi SPA Stable]")
             End If
             
@@ -3176,7 +3183,7 @@ Private Function ExecuteCDPCommand(ByVal cdpMethod As String, _
         socket_.LogEvent "CDP Command FAILED: " & cdpMethod, strRes, "[CDP:ERR]"
     Else
         res("Ok") = True: res("Json") = strRes: m_consecutiveCdpFailures = 0
-        If DEBUG_MODE And Not Silent Then
+        If m_debugMode And Not Silent Then
             socket_.LogEvent "CDP Command OK: " & cdpMethod, strRes, "[CDP:OK]"
         End If
     End If
@@ -3826,7 +3833,7 @@ Private Function EvaluateWaitCondition(ByVal mode As waitMode, ByRef ctx As Dict
                 ' If the browser's timestamp is frozen despite pending requests, it's a desync.
                 Dim jsNowVal As Double: jsNowVal = CDbl(probe("now"))
                 If jsNowVal = m_lastJsNow And (socket_.PendingRequestCount > 0) Then
-                    If DEBUG_MODE Then Debug.Print "BiDi: Renderer stall detected via heartbeat. Forcing probe recovery..."
+                    If m_debugMode Then Debug.Print "BiDi: Renderer stall detected via heartbeat. Forcing probe recovery..."
                     Call RecoverSpaProbe(targetCtx)
                 End If
                 m_lastJsNow = jsNowVal
@@ -3865,7 +3872,7 @@ Private Function EvaluateWaitCondition(ByVal mode As waitMode, ByRef ctx As Dict
                     ctx("missingProbeCount") = 0
 
                     ' Immediate re-injection without querying first.
-                    If DEBUG_MODE Then
+                    If m_debugMode Then
                         Debug.Print "BiDi: Predictive probe injection (navigationStarted shortcut)"
                     End If
                     Call StartSpaIdleProbe(targetCtx)
@@ -3890,7 +3897,7 @@ Private Function EvaluateWaitCondition(ByVal mode As waitMode, ByRef ctx As Dict
                 End If
 
                 ' JIT Re-injection: Attempt to heal the logical monitoring layer.
-                If DEBUG_MODE Then Debug.Print "BiDi: SPA Probe inactive. Attempting re-injection (#" & bCount & ")..."
+                If m_debugMode Then Debug.Print "BiDi: SPA Probe inactive. Attempting re-injection (#" & bCount & ")..."
                 Call StartSpaIdleProbe(targetCtx)
 
                 EvaluateWaitCondition = False
@@ -3957,7 +3964,7 @@ Private Function ExecuteBaseAction(ByVal contextId As String, _
         ' For transient protocol errors (Context Lost, Socket issues), wait and retry.
         retryCount = retryCount + 1
         If retryCount <= maxRetries Then
-            If DEBUG_MODE Then
+            If m_debugMode Then
                 Debug.Print "BiDi: Action '" & jsKey & "' failed (Status:" & status & "). " & _
                             "Attempting retry " & retryCount & "/" & maxRetries & "..."
             End If
@@ -3990,7 +3997,7 @@ Private Sub SyncAfterAction(ByVal contextId As String, _
     
     '    Only executed when the developer explicitly expects a page transition.
     If checkUrl Then
-        If DEBUG_MODE Then Debug.Print ">>> [Sync] Page navigation mode active."
+        If m_debugMode Then Debug.Print ">>> [Sync] Page navigation mode active."
         On Error Resume Next
         ' Wait for the physical address and document state to settle
         WaitForUrlStability contextId, 200, 3000
@@ -4042,7 +4049,7 @@ Private Function ValidateProtocolResponse(ByVal jsonRaw As String, ByVal methodN
         Dim jsErrDetail As String
         jsErrDetail = GetPathString(json, "result.exceptionDetails.text")
 
-        If DEBUG_MODE Then
+        If m_debugMode Then
             Debug.Print "--- BIDI JS ERROR REPORT | Method: " & methodName & " ---"
             Debug.Print FormatJavaScriptError(excDetails)
         End If
@@ -4220,7 +4227,7 @@ Private Function SanitizeMs(ByVal ms As Long, ByVal argName As String, _
     
     ' 1. Logic Guard: Rejects zero or negative values.
     If vMs <= 0 Then
-        If DEBUG_MODE Then
+        If m_debugMode Then
             Debug.Print "BiDi Warning: Invalid value (" & ms & ") for '" & argName & "'. Using default: " & defaultMs
         End If
         vMs = defaultMs
@@ -4366,7 +4373,7 @@ Public Sub Shutdown(Optional ByVal ForceClose As Boolean = True)
     End If
     Set socket_ = Nothing
     
-    If DEBUG_MODE Then Debug.Print "BiDi: Explicit Shutdown sequence completed."
+    If m_debugMode Then Debug.Print "BiDi: Explicit Shutdown sequence completed."
 End Sub
 
 ' [PRIVATE] UpdateWaitTelemetry (Atomic HUD Upsert - State Only)
@@ -4486,7 +4493,7 @@ Public Function ExecuteEnableGlobalShadowUnlocker() As String
     Dim strRes As String: strRes = ExecuteBiDiCommand("script.addPreloadScript", params, True)
     ExecuteEnableGlobalShadowUnlocker = GetPathString(WebJsonConverter.ParseJson(strRes), "result.script")
     
-    If DEBUG_MODE And ExecuteEnableGlobalShadowUnlocker <> "" Then
+    If m_debugMode And ExecuteEnableGlobalShadowUnlocker <> "" Then
         Debug.Print "BiDi: Global Shadow DOM Unlocker enabled (ID: " & ExecuteEnableGlobalShadowUnlocker & ")"
     End If
 End Function
@@ -4556,6 +4563,18 @@ Public Property Let UseTrustedClick(ByVal value As Boolean)
     m_useTrustedClick = value
 End Property
 
+' [Opt-out] Toggles this class's high-level developer trace (Debug.Print to the
+' Immediate window): navigation/action/recovery/SPA-probe diagnostics, JS error
+' reports, etc. Default True. Set False to silence routine trace while keeping the
+' unconditional critical-error prints. Does NOT affect the Discovery Log recorder
+' (StartDiscoveryLog) nor the low-level wire log in BiDiSocketCommunicator.
+Public Property Get DebugMode() As Boolean
+    DebugMode = m_debugMode
+End Property
+Public Property Let DebugMode(ByVal value As Boolean)
+    m_debugMode = value
+End Property
+
 Private Function TryExecutePhase(ByVal ctx As String, _
                                   ByVal key As String, _
                                   ByVal args As Collection, _
@@ -4621,7 +4640,7 @@ Private Sub TrySyncPhase(ByVal ctx As String, _
     
     ' Diagnostic Logging: Transient sync failures (504 timeout etc.) are non-fatal.
     ' The primary interaction (Click/Input) has already succeeded.
-    If syncErrNum <> 0 And DEBUG_MODE Then
+    If syncErrNum <> 0 And m_debugMode Then
         Debug.Print "[" & Format(Now, "hh:mm:ss") & "] BiDi Warning: Post-action Sync failed (Status: " & syncErrNum & "). DOM mutations only (no pending requests). Consider extending idle timeout."
     End If
 End Sub
