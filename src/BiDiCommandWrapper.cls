@@ -74,10 +74,8 @@ Private m_useTrustedClick As Boolean        ' default False -> synthetic JS clic
 Private m_debugMode As Boolean              ' Backing field for the DebugMode property. Default On; set in Class_Initialize.
 
 ' --- Foundation: ID Management ---
-' Request IDs and inflight tracking are owned by BiDiSocketCommunicator (see
-' AI NAVIGATION MAP). Wrapper accesses them via socket_.GetNextRequestId,
-' socket_.TrackInflightRequest / UntrackInflightRequest / ResetInflightTracking,
-' and socket_.PendingRequestCount.
+' Request IDs are owned by BiDiSocketCommunicator (see AI NAVIGATION MAP).
+' Wrapper accesses them via socket_.GetNextRequestId.
 
 ' --- Recovery & Stability ---
 Private m_isRecovering As Boolean
@@ -101,8 +99,6 @@ Private m_lastHudRetryTick As Currency ' Throttle timestamp for HUD send retries
 ' --- Internal State Variables ---
 Private m_mainContextId As String
 Private m_cdpSessionId As String
-' m_pendingRequestCount lives in Communicator (socket_.PendingRequestCount)
-Private m_lastJsNow As Double ' Heartbeat tracker (performance.now from JS)
 Private m_cachedRealmIds As Dictionary ' Cached Execution Realm ID
 Private m_validatedContexts As Dictionary ' Context IDs confirmed present in the tree (skips repeat getTree)
 Private m_activeSubscriptions As Dictionary ' Event Management (Aggregation)
@@ -195,7 +191,6 @@ Private Sub Class_Initialize()
     ' Ensures all tracking objects are instantiated for re-entrancy safety.
     Set socket_ = New BiDiSocketCommunicator
     Set m_activeSubscriptions = New Dictionary
-    ' m_inflightRequests lives in Communicator (initialized in its Class_Initialize)
     Set m_cachedRealmIds = New Dictionary
     Set m_validatedContexts = New Dictionary
     Set m_blockingPatterns = New Collection
@@ -330,87 +325,18 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
                 If m_validatedContexts.Exists(m_navigationContextId) Then m_validatedContexts.Remove m_navigationContextId
             End If
 
-            ' Reset inflight network request tracking via Communicator.
-            If m_navigationContextId = m_mainContextId Then
-                socket_.ResetInflightTracking
-            End If
-
             ' Log only when the navigation occurs in the main context.
             ' Sub-frame navigations (iframes) are handled silently to reduce log noise,
             ' as they are not consumed by the Predictive Recovery path (context mismatch).
             If m_debugMode Then
                 If m_navigationContextId = m_mainContextId Then
                     Debug.Print "BiDi: Navigation detected in main context " & _
-                                Left$(m_navigationContextId, 16) & "... (Probe pre-invalidated, inflight reset)"
-                End If
-            End If
-
-        ' --- NETWORK REQUEST START ---
-        Case "network.beforeRequestSent"
-            ' SPEC NOTE: The BiDi network.RequestData type defines the request-ID
-            ' field as "request" (not "requestId"). Earlier revisions of this
-            ' code used the wrong path "params.request.requestId" which silently
-            ' resolved to Empty/"" and rendered TrackInflightRequest a permanent
-            ' no-op. The inflight counter never moved, and SPA Idle was relying
-            ' entirely on the JS-side probe. Path is now corrected here and in
-            ' the matching responseCompleted/fetchError branch below so Track and
-            ' Untrack pair up and the inflight counter actually reflects state.
-            Dim reqId As String: reqId = GetPathString(json, "params.request.request")
-            Dim reqUrl As String: reqUrl = GetPathString(json, "params.request.url")
-            
-            ' Only track significant (non-noise) requests. Noise filtering stays
-            ' in the Wrapper because it depends on Wrapper-owned URL classifiers;
-            ' Communicator only owns the data structure and counter.
-            If Not IsNoiseUrl(reqUrl) Then
-                ' PHANTOM-INFLIGHT GUARD: Skip Track for URLs that match our
-                ' installed CDP blocking patterns. CDP Network.setBlockedURLs
-                ' aborts these requests, but chromium-bidi does NOT reliably
-                ' emit network.fetchError for CDP-killed requests (especially
-                ' <script> preloads, CORS-precheck failures, and resources
-                ' that get cancelled before reaching the network stack). If
-                ' we Track them here, they stay in m_inflightRequests forever
-                ' because no matching Untrack ever arrives -- producing
-                ' "phantom inflight" entries that stall CONSENSUS until the
-                ' Hard-Sync timeout (jsIdleDuration > minStableMs * 2) fires.
-                ' That timeout rarely fires on heavy SPAs that keep mutating
-                ' the DOM (FIBA basketball, etc.), so the safer fix is to
-                ' never enter Track in the first place. Cheap O(n) pattern
-                ' check (UrlMatchesPattern); n is small (typically <20 patterns).
-                Dim isBlocked As Boolean: isBlocked = False
-                If m_blockingPatterns.count > 0 Then
-                    Dim btok As Variant
-                    For Each btok In m_blockingPatterns
-                        If UrlMatchesPattern(reqUrl, CStr(btok)) Then
-                            isBlocked = True
-                            Exit For
-                        End If
-                    Next
-                End If
-                
-                If Not isBlocked Then
-                    socket_.TrackInflightRequest reqId
+                                Left$(m_navigationContextId, 16) & "... (Probe pre-invalidated)"
                 End If
             End If
 
         ' --- NETWORK REQUEST END (Success or Error) ---
         Case "network.responseCompleted", "network.fetchError"
-            ' See "SPEC NOTE" on the beforeRequestSent branch above: field is
-            ' "request", not "requestId". Path corrected so Untrack pairs with
-            ' Track.
-            '
-            ' RELIABILITY NOTE: CDP-blocked requests (Network.setBlockedURLs)
-            ' are SUPPOSED to surface here as network.fetchError, but in
-            ' practice chromium-bidi does not emit this event reliably for
-            ' all blocked-resource categories. See the PHANTOM-INFLIGHT GUARD
-            ' on the beforeRequestSent branch -- we now avoid Track for those
-            ' URLs in the first place, so a missing Untrack here is harmless.
-            ' This branch still runs for non-blocked requests and remains the
-            ' primary Untrack path for normal traffic.
-            Dim resId As String: resId = GetPathString(json, "params.request.request")
-            
-            ' Safety guard (negative count prevention) is handled inside UntrackInflightRequest.
-            socket_.UntrackInflightRequest resId
-            
             ' BLOCK VISIBILITY: Network.setBlockedURLs ends a request silently
             ' -- there is no dedicated "blocked" event. The request lands here
             ' as network.fetchError, but the chromium-bidi mapping currently
@@ -442,11 +368,6 @@ Private Sub DispatchGlobalEvents(ByVal json As Object)
         FormatAndStoreLog json
     End If
 End Sub
-
-Public Property Get PendingRequestCount() As Long
-    ' Delegated to Communicator
-    PendingRequestCount = socket_.PendingRequestCount
-End Property
 
 ' [PUBLIC] GetIframeContextIdByUrl
 '  Searches for a specific iframe context ID by its partial URL.
@@ -997,9 +918,6 @@ Private Function ExecuteBrowsingContextNavigate(ByVal url As String, _
     Dim targetCtx As String: targetCtx = ResolveTargetContext(contextId)
     
     ' WHY: reset only transient navigation/network state.
-    ' Reset inflight tracking via Communicator so stale request IDs
-    ' from the previous page do not cause count mismatches.
-    socket_.ResetInflightTracking
     
     ' INVARIANT (ORDERING): capture the TARGET URL's origin before the navigate command fires.
     ' This is compared against the post-navigation URL (from the BiDi response) to
@@ -1931,8 +1849,6 @@ Public Sub ClearState()
     m_cdpSessionId = ""
     m_mainContextId = ""
     
-    ' Reset inflight tracking via Communicator
-    If Not socket_ Is Nothing Then socket_.ResetInflightTracking
 
     ' INVARIANT (JIT INIT): use New Dictionary instead of Nothing for m_cachedRealmIds.
     ' Prevents Error 424 if other methods access the cache before JIT initialization.
@@ -2988,8 +2904,6 @@ Public Sub WaitForNetworkIdleSpa(ByVal minStableMs As Long, _
     ' Resolve the target browsing context (tab/window)
     Dim targetCtx As String: targetCtx = ResolveTargetContext(contextId)
     
-    ' Reset the JS heartbeat tracker to ensure fresh monitoring for this loop
-    m_lastJsNow = 0
     
     ' Process any pending WebSocket messages to sync current network request counts
     ' before entering the stability consensus phase.
@@ -3085,23 +2999,14 @@ Private Function EvaluateSpaIdleCondition(ByVal probe As Dictionary, _
         End If
     End If
 
-    ' --- 4. Self-Correction Logic (Hard-Sync) ---
-    ' Access and write via Communicator property.
-    If (inflFetch = 0 And inflXhr = 0) And (socket_.PendingRequestCount > 0) Then
-        If jsIdleDuration > (CDbl(minStableMs) * 2#) Then
-            If m_debugMode Then Debug.Print "BiDi: Hard-Syncing pendingRequestCount to 0 due to prolonged silence."
-            socket_.PendingRequestCount = 0
-        End If
-    End If
-
-    ' --- 5. Consensus Evaluation ---
-    ' Network Idle: Both protocol and JS hooks must report zero activity.
-    netIdle = (socket_.PendingRequestCount <= 0) And (inflFetch = 0) And (inflXhr = 0)
+    ' --- 4. Consensus Evaluation ---
+    ' Network Idle: JS fetch/XHR hooks report zero activity (condition 2).
+    netIdle = (inflFetch = 0) And (inflXhr = 0)
 
     ' DOM Stability: No mutations within the required threshold.
     activityStable = (jsIdleDuration >= CDbl(minStableMs))
 
-    ' --- 6. Final Consensus Window Check ---
+    ' --- 5. Final Consensus Window Check ---
     If netIdle And activityStable Then
         ' Check if the stable state has persisted for the designated window.
         If (currentMs - CDbl(ctx("stableStart"))) >= CDbl(minStableMs) Then
@@ -3794,7 +3699,6 @@ Private Sub WriteSpaWaitEnd(ByVal outcome As String, _
                        " | domQuietMs=" & Format(domQuietMs, "0") & _
                        " | slackMs=" & Format(slackMs, "0") & _
                        " | minStableMs=" & minStableMs & _
-                       " | pending=" & socket_.PendingRequestCount & _
                        " | fetch=" & inflFetch & _
                        " | xhr=" & inflXhr
 End Sub
@@ -3828,15 +3732,6 @@ Private Function EvaluateWaitCondition(ByVal mode As waitMode, ByRef ctx As Dict
             If isProbeActive Then
                 ' --- Path A: Probe is alive and reporting ---
                 ctx("missingProbeCount") = 0
-
-                ' Check for Stalled Renderer (Heartbeat verification).
-                ' If the browser's timestamp is frozen despite pending requests, it's a desync.
-                Dim jsNowVal As Double: jsNowVal = CDbl(probe("now"))
-                If jsNowVal = m_lastJsNow And (socket_.PendingRequestCount > 0) Then
-                    If m_debugMode Then Debug.Print "BiDi: Renderer stall detected via heartbeat. Forcing probe recovery..."
-                    Call RecoverSpaProbe(targetCtx)
-                End If
-                m_lastJsNow = jsNowVal
 
                 ' --- CORE CONSENSUS ENGINE ---
                 ' Evaluates Network Idle + DOM Stability.
@@ -4287,9 +4182,9 @@ Public Sub WaitForUrlStability(Optional ByVal contextId As String = "", _
         If (socket_.NowMs() - startMs) > CDbl(vTimeoutMs) Then Exit Do
         
         ' Adaptive yielding:
-        ' If recording is active or network requests are pending, maintain queue sync.
+        ' If recording is active, maintain queue sync.
         ' Otherwise, yield via Communicator for high-speed URL change detection.
-        If m_isRecording Or (socket_.PendingRequestCount > 0) Then
+        If m_isRecording Then
             WaitHeartbeat 50
         Else
             socket_.YieldExecution 50, True
@@ -4395,12 +4290,11 @@ Private Sub UpdateWaitTelemetry(ByVal mode As waitMode, ByRef ctx As Dictionary)
             colorCode = "#00FF00" ' Green
             
         Case WaitMode_SpaIdle
-            Dim netCount As Long: netCount = socket_.PendingRequestCount
             Dim idleTime As Double: idleTime = (socket_.NowMs() - CDbl(ctx("stableStart"))) / 1000
             Dim targetIdle As Double: targetIdle = CLng(ctx("minStableMs")) / 1000
             
             ' Determine HUD color and text based on STATE, not COUNTER.
-            If netCount > 0 Or idleTime < targetIdle Then
+            If idleTime < targetIdle Then
                 colorCode = "#FF4444" ' Red (Busy)
                 Msg = "BiDi: [SPA SYNC]" & vbLf & "Status: Synchronizing..."
             Else

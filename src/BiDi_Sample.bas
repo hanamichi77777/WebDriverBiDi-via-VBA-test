@@ -341,7 +341,7 @@ Public Sub Main07()
     ' Start Recording AFTER navigation (subscribing to beforeRequestSent before a blocking nav can stall requests); post-nav is enough for noise discovery.
     bidi.StartDiscoveryLog
     ' ==========================================
-   
+    
     ' Execute Click in Shadow DOM
     bidi.ExecuteShadowClick "#utility-sign-in button"
             

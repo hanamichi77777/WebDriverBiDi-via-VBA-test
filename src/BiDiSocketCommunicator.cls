@@ -1,6 +1,6 @@
 VERSION 1.0 CLASS
 BEGIN
-  MultiUse = -1  'True 
+  MultiUse = -1  'True
 END
 Attribute VB_Name = "BiDiSocketCommunicator"
 Attribute VB_GlobalNameSpace = False
@@ -49,7 +49,6 @@ Option Explicit
 ' [STATE OWNERSHIP]  This class is the owner. Do not duplicate these upstream.
 '   WinHttp/WebSocket handles : hSession_, hConnection_, hRequest_, hWebSocket_
 '   Request id generation     : GetNextRequestId (seed = CMD_ID_FLOOR)
-'   Inflight tracking         : Track/Untrack/ResetInflightTracking, PendingRequestCount
 '   QPC monotonic clock       : NowTicks / NowMs / ElapsedMs (single source of time)
 '   I/O locks                 : m_isSendReceiving, m_isReading
 '
@@ -176,13 +175,6 @@ Private m_lastPumpTicks As Currency ' Throttle state for PumpMessages
 Private m_nextRequestId As Long
 Private Const MAX_MSG_SIZE As Long = 300000 ' Threshold to prevent VBA hanging (mirrors Wrapper constant)
 
-' --- Inflight Network Request Tracking (owner; see AI NAVIGATION MAP) ---
-' Tracks active network requests by requestId to determine when all HTTP activity
-' has settled. The Dictionary stores requestId -> True for O(1) lookup/removal.
-' m_pendingRequestCount is a derived counter kept in sync for fast reads.
-Private m_inflightRequests As Dictionary   ' Dictionary: requestId -> True
-Private m_pendingRequestCount As Long
-
 ' Initialization & Termination
 Private Sub Class_Initialize()
     ' Fail-fast QPC initialization. Required for all timer APIs (NowTicks/NowMs/ElapsedMs).
@@ -223,10 +215,6 @@ Private Sub Class_Initialize()
 
     ' Request ID seed (first issued id = CMD_ID_FLOOR)
     m_nextRequestId = CMD_ID_FLOOR - 1
-
-    ' Inflight tracking initialization
-    Set m_inflightRequests = New Dictionary
-    m_pendingRequestCount = 0
 
     SetState StateDisconnected
 End Sub
@@ -680,7 +668,7 @@ Public Function SendAndReceive(ByVal jsonMessage As String, Optional ByVal waitT
     ' [PATCH] Raised from 1000. Because the drain fix below keeps the matching
     ' response from being buried, a deeper buffer can now safely retain events
     ' that arrive during a long-held command (instead of dropping them, which
-    ' would desync PendingRequestCount). ~20k small log/network events is a few
+    ' would lose recorder log entries). ~20k small log/network events is a few
     ' MB at most; lower it if memory is tight, raise it for very chatty pages.
     Const MAX_EVENT_BUFFER_SIZE As Long = 20000
     
@@ -924,47 +912,6 @@ Public Function GetParsedEvent(Optional ByVal minMsgSize As Long = 10, _
     
     Set GetParsedEvent = parsed
 End Function
-
-' Inflight Network Request Tracking API
-' SUMMARY: Provides a centralized data store for tracking active network requests.
-'          The Wrapper calls these methods from DispatchGlobalEvents when processing
-'          network.beforeRequestSent / responseCompleted / fetchError events.
-'
-' DESIGN NOTE: The tracking logic (when to track, noise filtering) remains in the
-'   Wrapper because it depends on Wrapper-owned state (IsNoiseUrl, m_mainContextId).
-'   Communicator only owns the data structure and counter.
-Public Sub TrackInflightRequest(ByVal requestId As String)
-    If Not m_inflightRequests.Exists(requestId) Then
-        m_inflightRequests.Add requestId, True
-        m_pendingRequestCount = m_pendingRequestCount + 1
-    End If
-End Sub
-
-Public Sub UntrackInflightRequest(ByVal requestId As String)
-    If m_inflightRequests.Exists(requestId) Then
-        m_inflightRequests.Remove requestId
-        m_pendingRequestCount = m_pendingRequestCount - 1
-    End If
-    ' Safety Guard: Prevent count from ever falling below zero due to protocol desync.
-    If m_pendingRequestCount < 0 Then m_pendingRequestCount = 0
-End Sub
-
-Public Sub ResetInflightTracking()
-    Set m_inflightRequests = New Dictionary
-    m_pendingRequestCount = 0
-End Sub
-
-Public Property Get PendingRequestCount() As Long
-    PendingRequestCount = m_pendingRequestCount
-End Property
-
-' Direct write access for Wrapper's Hard-Sync correction.
-' Used by EvaluateSpaIdleCondition when JS reports zero activity but the VBA counter
-' is stuck due to protocol desync (missed responseCompleted events).
-Public Property Let PendingRequestCount(ByVal value As Long)
-    m_pendingRequestCount = value
-    If m_pendingRequestCount < 0 Then m_pendingRequestCount = 0
-End Property
 
 ' Reads a WebSocket frame.
 ' Refactored to include a Liveness Check (deadlock detection) and strict memory management.
