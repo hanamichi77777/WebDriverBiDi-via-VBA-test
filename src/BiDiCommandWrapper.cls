@@ -2126,7 +2126,9 @@ Private Function BuildShadowSelectorArg(ByVal selectorsArray As Variant) As Dict
 End Function
 
 ' Discovery & Recorder API
-' Call this AFTER navigation: it subscribes to beforeRequestSent, which during a blocking nav can stall requests; post-nav capture is enough for noise discovery.
+' Call this AFTER navigation; post-nav capture is enough for noise discovery.
+' beforeRequestSent is deliberately NOT subscribed: its per-request-initiation
+' flood destabilizes the single-threaded input loop on Wiz-style SPAs.
 Public Sub StartDiscoveryLog(Optional ByVal excludeImagesAndCss As Boolean = True)
     Set m_recorderLogs = New Collection
     m_isRecording = True
@@ -2142,12 +2144,11 @@ Public Sub StartDiscoveryLog(Optional ByVal excludeImagesAndCss As Boolean = Tru
     ' Include network.fetchError so blocked requests (Network.setBlockedURLs
     ' returns ERR_BLOCKED_BY_CLIENT through this event) are visible in the
     ' discovery log.
-    Dim events(4) As String
-    events(0) = "network.beforeRequestSent"
-    events(1) = "network.responseCompleted"
-    events(2) = "network.fetchError"
-    events(3) = "browsingContext.load"
-    events(4) = "browsingContext.domContentLoaded"
+    Dim events(3) As String
+    events(0) = "network.responseCompleted"
+    events(1) = "network.fetchError"
+    events(2) = "browsingContext.load"
+    events(3) = "browsingContext.domContentLoaded"
     Me.ExecuteSessionSubscribe events
 
     Debug.Print "BiDi Recorder: Started. (Filter Resources: " & excludeImagesAndCss & ")"
@@ -2407,7 +2408,7 @@ Private Sub FormatAndStoreLog(ByVal json As Object)
     Dim method As String: method = json("method")
 
     Select Case method
-        Case "network.beforeRequestSent", "network.responseCompleted", "network.fetchError", "browsingContext.load", "browsingContext.domContentLoaded", "log.entryAdded"
+        Case "network.responseCompleted", "network.fetchError", "browsingContext.load", "browsingContext.domContentLoaded", "log.entryAdded"
         Case Else
             Exit Sub
     End Select
@@ -2422,63 +2423,6 @@ Private Sub FormatAndStoreLog(ByVal json As Object)
     relTime = Format((socket_.NowMs() / 1000) - m_recorderStartTime, "0.00") & "s"
 
     Select Case method
-        Case "network.beforeRequestSent"
-            ' Guard: Validate required nested keys before access
-            If Not params.Exists("request") Then Exit Sub
-            If Not IsObject(params("request")) Then Exit Sub
-            Dim req As Object: Set req = params("request")
-            If Not req.Exists("url") Then Exit Sub
-            Dim url As String: url = CStr(req("url"))
-            Dim reqKey As String: reqKey = NormalizeEndpointKey(url)
-            Dim reqId As String: reqId = ""
-            If req.Exists("request") Then reqId = CStr(req("request"))
-
-            If m_excludeResources Then
-                If IsNoiseUrl(url) Then BumpSuppressed reqKey: Exit Sub
-
-                ' Header-based optional filter: skip pure image requests
-                If req.Exists("headers") Then
-                    On Error Resume Next
-                    Dim hdrJson As String
-                    hdrJson = LCase(WebJsonConverter.ConvertToJson(req("headers")))
-                    If Err.Number = 0 And Len(hdrJson) > 0 Then
-                        If InStr(hdrJson, """accept""") > 0 And InStr(hdrJson, "image/") > 0 Then
-                            If InStr(hdrJson, "image/webp") > 0 Or InStr(hdrJson, "image/png") > 0 _
-                                Or InStr(hdrJson, "image/jpeg") > 0 Or InStr(hdrJson, "image/gif") > 0 _
-                                Or InStr(hdrJson, "image/svg") > 0 Then
-                                If InStr(hdrJson, """value"":""image/") > 0 Then
-                                    Err.Clear
-                                    On Error GoTo 0
-                                    BumpSuppressed reqKey
-                                    Exit Sub
-                                End If
-                            End If
-                        End If
-                    End If
-                    Err.Clear
-                    On Error GoTo 0
-                End If
-            End If
-
-            ' [AI-Log] Remember the request start so the matching response can report
-            ' dur=, and so a never-answered request can be flushed as [REQ-OPEN].
-            If Len(reqId) > 0 Then
-                If Not m_recPendingReqMs.Exists(reqId) Then
-                    m_recPendingReqMs.Add reqId, socket_.NowMs()
-                    m_recPendingKey.Add reqId, reqKey
-                End If
-            End If
-
-            Dim reqMethod As String: reqMethod = ""
-            If req.Exists("method") Then reqMethod = CStr(req("method"))
-            ' [AI-Log] key= already carries host+path (volatile query stripped,
-            ' rpcids kept), which is what the AI analysis keys off. The raw url=
-            ' was a near-duplicate of key= plus volatile query noise (cache-bust
-            ' v=, _reqid=, session tokens, huge gstatic module lists), so it is
-            ' intentionally omitted to keep the log token-cheap. Do not re-add it.
-            LogLine = "[" & relTime & "] [REQ] " & reqMethod & " | id=" & ShortId(reqId) & _
-                      " | key=" & reqKey & " | idle=" & IIf(IsIdleIgnored(url), "skip", "track")
-
         Case "network.responseCompleted"
             If Not params.Exists("response") Then Exit Sub
             If Not IsObject(params("response")) Then Exit Sub
