@@ -35,6 +35,7 @@ For validation, this project uses a challenging benchmark: entering text into th
 ServiceNow is frequently regarded as one of the more difficult Single Page Applications to automate due to its complex SPA behavior, Shadow DOM usage, and asynchronous UI updates.
 
 The validation code is contained in the `Main07` procedure.
+
 ---
 ## [Supported OS]
 * **Windows11**
