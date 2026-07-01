@@ -2,12 +2,39 @@
 
 ![WebDriver BiDi for SeleniumVBA](image/pr_image.png)
 
-I have uploaded files that shows WebDriver BiDi working with **[SeleniumVBA](https://github.com/GCuser99/SeleniumVBA)** (@GCuser99). 
-This VBA program was developed based on **"ZeroInstall BrowserDriver for VBA"** (@kabkabkab) and changed the connection from CDP to WebDriver BiDi with a WebSocket communication. I created this in hopes of making it possible to detect Events using SeleniumVBA (@GCuser99).
-To overcome the flakiness arising from DOM updates and async requests in modern SPAs like React and Vue.js, I’m challenging the boundaries of what’s possible with VBA.Since we assume the concurrent use of both Classic and BiDi, the BiDi methods are kept to a minimum.
+# WebDriver BiDi Extension for SeleniumVBA
 
-For validation purposes, I have established a challenging benchmark: correctly entering text into the ServiceNow login form. ServiceNow is frequently cited as one of the most difficult Single Page Applications (SPAs) to automate. The execution code is contained in the **Main07 procedure**.
+This project is a WebDriver BiDi extension for **[SeleniumVBA](https://github.com/GCuser99/SeleniumVBA)** by @GCuser99.
 
+It was developed based on **"ZeroInstall BrowserDriver for VBA"** by @kabkabkab, replacing the original CDP-based connection with WebDriver BiDi over WebSocket communication.
+
+This project is not intended to replace SeleniumVBA, Playwright, Puppeteer, or Selenium itself.  
+Instead, it focuses on extending SeleniumVBA with WebDriver BiDi capabilities, especially for modern third-party SPA sites where no explicit completion signal is available.
+
+Modern SPAs such as React, Vue.js, and enterprise web applications often update the DOM asynchronously after network responses have completed. This makes traditional VBA automation fragile, because "request completed" does not always mean "page is ready."
+
+To address this, the tool observes network activity, Fetch/XHR activity, DOM mutations, and quiet windows to infer when the page has become stable enough for the next automation step.
+
+Since this project assumes concurrent use of classic SeleniumVBA methods and BiDi-based observation, the BiDi API surface is intentionally kept minimal.
+
+## Discovery Log
+
+The Discovery Log is designed for third-party SPA sites where the automation code cannot access an internal "ready" or "completed" flag.
+
+It records network responses, DOM mutation bursts, suppressed background noise, and stability margins such as `slackMs`.
+
+This makes it easier to determine which requests should be tracked, which requests should be ignored, which resources may be safely blocked, and whether the current wait thresholds are appropriate for the target site.
+
+In other words, the Discovery Log is not just an execution log.  
+It is a diagnostic tool for discovering what should be waited for when automating unknown third-party SPAs.
+
+## Validation Benchmark
+
+For validation, this project uses a challenging benchmark: entering text into the ServiceNow login form.
+
+ServiceNow is frequently regarded as one of the more difficult Single Page Applications to automate due to its complex SPA behavior, Shadow DOM usage, and asynchronous UI updates.
+
+The validation code is contained in the `Main07` procedure.
 ---
 ## [Supported OS]
 * **Windows11**
