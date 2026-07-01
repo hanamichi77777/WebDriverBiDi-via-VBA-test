@@ -2,8 +2,6 @@
 
 ![WebDriver BiDi for SeleniumVBA](image/pr_image.png)
 
-# WebDriver BiDi Extension for SeleniumVBA
-
 This project is a WebDriver BiDi extension for **[SeleniumVBA](https://github.com/GCuser99/SeleniumVBA)** by @GCuser99.
 
 It was developed based on **"ZeroInstall BrowserDriver for VBA"** by @kabkabkab, replacing the original CDP-based connection with WebDriver BiDi over WebSocket communication.
